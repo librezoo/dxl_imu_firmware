@@ -1,0 +1,280 @@
+{
+  "name": "WCH CH32V20x EVT",
+  "source_url": "https://www.wch.cn/downloads/CH32V20xEVT_ZIP.html",
+  "package_release": "2026.07",
+  "standard_peripheral_library_version": "2.4",
+  "imported_on": "2026-09-11",
+  "scope": "Complete EXAM/SRC, USART_DMA system_ch32v20x.c/.h, and package directory listings",
+  "files": [
+    {
+      "path": "EVT/CH32V20x_List_EN.txt",
+      "bytes": 28145,
+      "sha256": "4643c54a7e7aeaf0fcc6352b9fd5f94fbc6343768c72da4c205407f66eeab3c9"
+    },
+    {
+      "path": "EVT/CH32V20x_List.txt",
+      "bytes": 20829,
+      "sha256": "65a314da0ce6ecab84f16276a8bb3960e055dea67776a256eed05e4880496687"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Core/core_riscv.c",
+      "bytes": 7839,
+      "sha256": "4de385cce8f9b62e5c763ad5cc23d22c9d36c166b536fe863ff58019ab964b74"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Core/core_riscv.h",
+      "bytes": 17673,
+      "sha256": "2f6c189644ae05fd485b3650f7c02e7f967baa3b739ffb41170183d641d614fe"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Debug/debug.c",
+      "bytes": 7463,
+      "sha256": "2ef68a74e2d04276de20619ce00593a300b3582fcbd97d5df4d6f98c17068b1b"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Debug/debug.h",
+      "bytes": 1500,
+      "sha256": "ce07fdd6574134f2a496ade654fb48e8049985434d2666a8d201b6f2658d9109"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Ld/Link.ld",
+      "bytes": 4204,
+      "sha256": "87c3eb9a5c449f694068b39366a6a95e014084fffc666422bfd486d966df6f75"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_adc.h",
+      "bytes": 12706,
+      "sha256": "6aa47660cb1a9275971deb20716d35de0c03cffb52b3ecde2f9686781795837a"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_bkp.h",
+      "bytes": 4581,
+      "sha256": "1133c132b4c4d6318d87ea1cb7d430cd0af0eb04bc94b52571bcdd0587b4adbb"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_can.h",
+      "bytes": 20502,
+      "sha256": "924310546b4da0dab8676fb1bd2b91edf2055a567f5d365545a5ba2e0a6a05dc"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_crc.h",
+      "bytes": 1132,
+      "sha256": "0b52979be75eb2b2341134bbbb874f210bc824f1c7c49a0ba7ddd36968fd710d"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_dbgmcu.h",
+      "bytes": 1935,
+      "sha256": "a2c817bec19d32f1a2026c598c991ee1bbe680989dfcfbfb1969b2fbb74a3070"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_dma.h",
+      "bytes": 10090,
+      "sha256": "1fc8986ba0e3f4dc261a3df29b10ea192410b7061e23b007f0cc96363e18935b"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_exti.h",
+      "bytes": 4498,
+      "sha256": "1e84a4f74f57d5bd51514f97dee9cdff7533fd375a6a79d80a42961c675b2c5c"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_flash.h",
+      "bytes": 9056,
+      "sha256": "5bee20c009d53d578a5d13103eea56c28d644744f5a38276bddd1670a54de3bf"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_gpio.h",
+      "bytes": 9842,
+      "sha256": "f8f460ea53a9b326cf448a82b42e5fc8a84bc2d17275c6ab53073aee5b64e8d0"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_i2c.h",
+      "bytes": 22994,
+      "sha256": "f877f2b022f21ccfac63a3adfa5b039211fcd34b3f2c11fba53e47a5e5b6e404"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_iwdg.h",
+      "bytes": 1834,
+      "sha256": "b934d9c00958fed52de798c5887e86d6ae51bc73b656df60e4f826e01c008609"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_misc.h",
+      "bytes": 2599,
+      "sha256": "8be276870894a05d351c4818e39c864050cab1f8a25210e4aea544fe8023b636"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_opa.h",
+      "bytes": 1944,
+      "sha256": "959c73ceea2bbd34a2cf7d7d14d4f8fa2e35cacf3c600860768cf38174d0c73e"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_pwr.h",
+      "bytes": 3067,
+      "sha256": "c0a04821c4e23ca9ca24439826df7d2ac421250e7595cb32b2cea0a83c632a4b"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_rcc.h",
+      "bytes": 11808,
+      "sha256": "53e9384b28c7704c8e0ad3e900eb661f44599d80e4be6c6e7879dfabbda9b72b"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_rtc.h",
+      "bytes": 3098,
+      "sha256": "f6c73e0da88852cfdcbde3db647b28017160c5f73cb0eebc48b48f9e1af7a0c7"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_spi.h",
+      "bytes": 10718,
+      "sha256": "faeabc6d529402be495ce07d2cc7b0813fe4e20922f6ae1c3a5a8171ea8892b0"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_tim.h",
+      "bytes": 33373,
+      "sha256": "23f24a9d553e25a11884d9e780ec05e17d9457a7c5364dc230f0524aa64b8f3f"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_usart.h",
+      "bytes": 9656,
+      "sha256": "409c6b2a4b23f38c1bc7ec867df0fcc89b0f30c00ea54ea827f9b417ce092a3e"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_usb.h",
+      "bytes": 22758,
+      "sha256": "ae9974c0463ea89e106a21ad79cd9b4c48c610593aaa4c70401ad21e11a0a627"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x_wwdg.h",
+      "bytes": 1455,
+      "sha256": "d8a9946418300f8e295a7212f8e4d6784ac3495e5df72a4e007bfc460134b670"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/inc/ch32v20x.h",
+      "bytes": 353879,
+      "sha256": "d5bb2b8cb3b1fecd12ba4179f5cbe8f3864adb191b36b0d706e481c2e28158d0"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_adc.c",
+      "bytes": 39408,
+      "sha256": "cf4bef15b9429d1db34e52e00ca45ca61ba3eeab399799588c57489e725c2725"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_bkp.c",
+      "bytes": 6358,
+      "sha256": "0808a8fa4bc9c696e7a31cfce1f668510edcbb65736ba1cda6a884765765e6ca"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_can.c",
+      "bytes": 33680,
+      "sha256": "fcbf10e4db6d4da7bed94eee36a4d527dcfb52fc59314bb8cfedf478e4b325d4"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_crc.c",
+      "bytes": 2796,
+      "sha256": "11ea69ecdadd5719a171c0c4f940cbf5bc449f157ed3e50d61b561272e3ad882"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_dbgmcu.c",
+      "bytes": 3645,
+      "sha256": "f13a70d2ff7d4876dc04964fb6b191896fd3b8dea738033501645aae8da5eda6"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_dma.c",
+      "bytes": 18381,
+      "sha256": "1ffc0dbfaff40ba61882c4c95caa9c6d31564bbd4caea3cd0be16f4c237502d6"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_exti.c",
+      "bytes": 5438,
+      "sha256": "3ed7f0d59315f11805d04880b2b9f873bbb586b3099905073ffca3e111449e8a"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_flash.c",
+      "bytes": 35485,
+      "sha256": "f36a40ada3dea53af15b02ef579d56bcd6d910d34a782c8c5bbc325c58b785bf"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_gpio.c",
+      "bytes": 39338,
+      "sha256": "2a9e98a7846dfdda63684300c30162365a444aa574e55e7ba6fbb5242c482ff7"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_i2c.c",
+      "bytes": 32267,
+      "sha256": "6539aa7aad597eab443ee1a47ecff6adbb1e6475dc654deb51be1e0bf6a7e157"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_iwdg.c",
+      "bytes": 3870,
+      "sha256": "dd433c6d9001637226a5928c6f0ffe7e899b3a6b9e6a571121baa1fa382f8d40"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_misc.c",
+      "bytes": 3258,
+      "sha256": "484bd518a7e65263cc00bdd2beffbc54782b0f071da8ec68ae9cdf06d4195ba3"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_opa.c",
+      "bytes": 2741,
+      "sha256": "edb14daf985e9432ac0c69744277e2d01e3e4f82586c622d80a90e25c661c31c"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_pwr.c",
+      "bytes": 10430,
+      "sha256": "ea284328832ba9174edf9827309d67852bb1f1c2863e672d1f759dcc6b7c8318"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_rcc.c",
+      "bytes": 31279,
+      "sha256": "5d6a177542c68013a39f198bfbed81f5adff519c6990fd1bc74e4d94d1b8514b"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_rtc.c",
+      "bytes": 15261,
+      "sha256": "6899d7c509829959ee592b677b3d4bbddb6dc4ac4c84aef2a2a54648d6f7e5de"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_spi.c",
+      "bytes": 21305,
+      "sha256": "44d280302c59528dd971947e9775513772ff459a56d73390eb36b8121bbae8ad"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_tim.c",
+      "bytes": 93563,
+      "sha256": "3e7bae6ad5f69d7f79ac72e1b46f78159890b918b933a4640e8d47fa2c22b000"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_usart.c",
+      "bytes": 25501,
+      "sha256": "89a582b0e6728f287967c7d03e94cf6f1f160087258286995a3ce1ea3dec83fe"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Peripheral/src/ch32v20x_wwdg.c",
+      "bytes": 4181,
+      "sha256": "3aa737cd96a11011395852d2f331e5f92efd1d6181a72255d1e8e2d56b965cef"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Startup/startup_ch32v20x_D6.S",
+      "bytes": 9396,
+      "sha256": "fe7c59a44dbebb37f1ce91190a950b0fc86c28797d71b1396bcfe08d33feeb4f"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Startup/startup_ch32v20x_D8.S",
+      "bytes": 10070,
+      "sha256": "eb93a028ef4834d451def3da7ed67969adaf4fd9de1118c18d9c85650a40c3f6"
+    },
+    {
+      "path": "EVT/EXAM/SRC/Startup/startup_ch32v20x_D8W.S",
+      "bytes": 10207,
+      "sha256": "99b297528dde15c6e368b6014400d0419ee6d6bfffcfbaa920c0f8037d8ce56b"
+    },
+    {
+      "path": "EVT/EXAM/USART/USART_DMA/User/system_ch32v20x.c",
+      "bytes": 30299,
+      "sha256": "e20c2afef30ca5838db000c8d4550b01bdd418ee801a8e8092ec9df9b3fd2360"
+    },
+    {
+      "path": "EVT/EXAM/USART/USART_DMA/User/system_ch32v20x.h",
+      "bytes": 1054,
+      "sha256": "47a8954a2f015d02196264d7aeb9ca6ad7990e13848199af8b36453ba68ea724"
+    }
+  ]
+}

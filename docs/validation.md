@@ -1,7 +1,18 @@
-# 拆仓验证记录
+# 固件验证记录
 
 日期：2026-09-11。
 
-CMake 宿主构建可用。原测试包长断言重复计入头部，整理时将断言改为准确长度并增加填充字节和解析后载荷检查；运行代码未因该修正改变。修正后 CTest 1/1 通过。此测试未验证与外部 SDK 的全部线协议互通情形。
+CMake 宿主构建可用。原测试包长断言重复计入头部，整理时将断言改为准确长度并增加填充字节和解析后载荷检查；运行代码未因该修正改变。修正后 CTest 1/1 通过。此测试未覆盖与独立 Dynamixel 实现的全部线协议互通情形。
 
-本轮未重新构建完整操作系统镜像，也未执行实物板卡或舵机运动验收。第三方源码与本地增量的来源见版本锁定、`provenance.json` 和 `THIRD_PARTY.md`。
+## SDK 纳入仓库后的验证
+
+- WCH EVT 2026.07：纳入 54 个原始文件，共 1,130,389 字节；与来源包逐文件 SHA-256 相同。文件范围和清单见 `vendor/wch-ch32v20x/`。
+- 官方 MounRiver Studio 2 所带 xPack RISC-V Embedded GCC 8.2.0：`build.ps1` 编译、链接并生成 ELF、HEX、BIN、MAP 成功。
+- CMake MCU 入口：使用同一官方工具链和仓库内 SDK，在全新 `build-ch32-cmake/` 目录构建成功。
+- 独立源码检出：从 Git 待提交索引导出到包含空格的 `IMU firmware/` 目录，在仓库外调用脚本并使用包含空格的输出路径，构建成功。此构建与 CMake 验证均将 `WCH_EVT_ROOT` 指向不存在的路径，确认不读取该外部 SDK 设置。
+- 以上三个 MCU 构建的 BIN 文件 SHA-256 完全一致：`418b341a9136f0e45160857c86515d708e280997b431e9386c3123d708db2b4f`。
+- SDK 纳入后重新执行 WSL Ubuntu 的 CMake Debug 宿主构建与 CTest，1/1 通过。
+
+官方 `size` 工具输出：text 11,072 字节、data 40 字节、BSS 4,264 字节。应用 Flash 链接范围仍为 56 KiB；最后两个配置页保留。
+
+本轮完成编译和软件测试，未执行烧录、实物板卡或舵机运动验收。第三方来源见 `provenance.json`、`vendor/wch-ch32v20x/manifest.json` 和 `THIRD_PARTY.md`。

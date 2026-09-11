@@ -13,3 +13,5 @@
 *.source -text
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
+# Preserve the official SDK byte-for-byte, including its original line endings.
+vendor/wch-ch32v20x/EVT/** -text
