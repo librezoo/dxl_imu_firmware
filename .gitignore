@@ -1,0 +1,22 @@
+# Generated files and local dependencies
+.work/
+.deps/
+.cache/
+target/
+build/
+build-*/
+dist/
+__pycache__/
+*.py[cod]
+.venv/
+*.log
+artifacts/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secret*
+!*.pub
+.DS_Store
+Thumbs.db

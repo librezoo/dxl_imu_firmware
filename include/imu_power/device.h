@@ -1,0 +1,60 @@
+#ifndef IMU_POWER_DEVICE_H
+#define IMU_POWER_DEVICE_H
+
+#include "config.h"
+#include "dxl.h"
+#include "imu_wire.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#define IMU_POWER_DIAG_ADDRESS 160u
+#define IMU_POWER_CONFIG_ADDRESS 192u
+#define IMU_POWER_MAX_READ 64u
+#define IMU_POWER_CONFIG_CMD_SAVE 0x01u
+#define IMU_POWER_CONFIG_CMD_REBOOT 0x02u
+#define IMU_POWER_CONFIG_CMD_LOAD_DEFAULTS 0x03u
+#define IMU_POWER_CONFIG_CMD_UNLOCK 0xA5u
+#define IMU_POWER_CONFIG_CMD_UNLOCK_CONFIRM 0x5Au
+
+typedef struct {
+    uint16_t firmware_version;
+    uint8_t protocol_version;
+    uint16_t status_flags;
+    uint32_t sample_counter;
+    uint32_t sample_age_us;
+    uint16_t last_error;
+    uint16_t reset_reason;
+    uint16_t config_status;
+    uint32_t error_count;
+} imu_power_diagnostics_t;
+
+typedef struct {
+    /* active_config is the target persisted configuration; runtime_* remain
+       unchanged until reboot so an ID/baud write cannot strand the bus. */
+    imu_power_config_t active_config;
+    uint8_t runtime_id;
+    uint32_t runtime_baudrate;
+    imu_power_config_t staged_config;
+    uint32_t config_generation;
+    bool staged_valid;
+    bool maintenance_unlocked;
+    uint8_t unlock_step;
+    uint8_t staged_command;
+    bool staged_command_valid;
+    bool reboot_requested;
+    imu_power_sample_t sample;
+    imu_power_diagnostics_t diagnostics;
+    imu_power_config_storage_t storage;
+} imu_power_device_t;
+
+void imu_power_device_init(imu_power_device_t *device,
+                           const imu_power_config_storage_t *storage);
+void imu_power_device_set_sample(imu_power_device_t *device,
+                                 const imu_power_sample_t *sample);
+size_t imu_power_device_handle(imu_power_device_t *device,
+                               const imu_power_dxl_frame_t *frame,
+                               uint8_t *response, size_t response_capacity);
+
+#endif

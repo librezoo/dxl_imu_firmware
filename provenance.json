@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "extracted_on": "2026-09-11",
+  "source_workspace": "microduck_rl",
+  "upstream_runtime_revision": "590b986bd8c0d50ae02cb3ea2f59c463b6828168",
+  "note": "Hashes describe original files before path/documentation changes during repository organization.",
+  "files": [
+    {
+      "source": "microduck/imu_power_fw/.gitignore",
+      "destination": ".gitignore",
+      "sha256_before_reorganization": "d19034cc723f8b88da9f2345c7f290a0103108126dfe980eec5ff14c98c217b5"
+    },
+    {
+      "source": "microduck/imu_power_fw/CMakeLists.txt",
+      "destination": "CMakeLists.txt",
+      "sha256_before_reorganization": "5802b07844c33948b3f5472bfebc207eaf268957a06d8d6788217880e45fb0c6"
+    },
+    {
+      "source": "microduck/imu_power_fw/include/imu_power/config.h",
+      "destination": "include/imu_power/config.h",
+      "sha256_before_reorganization": "5c6fd738b568478d9e11f2b1ac08cd9b35d227dd53c2a119eb1c2a626951e5e0"
+    },
+    {
+      "source": "microduck/imu_power_fw/include/imu_power/device.h",
+      "destination": "include/imu_power/device.h",
+      "sha256_before_reorganization": "b88bc07b87d68589140af65d8c9e7939183b15b5c27b82636dd3cf8401628152"
+    },
+    {
+      "source": "microduck/imu_power_fw/include/imu_power/dxl.h",
+      "destination": "include/imu_power/dxl.h",
+      "sha256_before_reorganization": "fc179866dd2251557e16fa4472b27a220680a5fda0efcd311a3436cb8396eeac"
+    },
+    {
+      "source": "microduck/imu_power_fw/include/imu_power/imu_wire.h",
+      "destination": "include/imu_power/imu_wire.h",
+      "sha256_before_reorganization": "c4d7f9ebd74cd9980564f5285c08151ebb476cb3bd839ce0a557dc14384cfd47"
+    },
+    {
+      "source": "microduck/imu_power_fw/include/imu_power/maintenance.h",
+      "destination": "include/imu_power/maintenance.h",
+      "sha256_before_reorganization": "bc6dacace77a17419060bf219cb41eef13ca2fbe9e9937c026a011c8840a517f"
+    },
+    {
+      "source": "microduck/imu_power_fw/platform/ch32_main.c",
+      "destination": "platform/ch32_main.c",
+      "sha256_before_reorganization": "bdeaa1b7ecdd5ecf13852169d1c1d446630015999230f5d40fc62fa2cc6a2196"
+    },
+    {
+      "source": "microduck/imu_power_fw/platform/ch32v203_port.c",
+      "destination": "platform/ch32v203_port.c",
+      "sha256_before_reorganization": "62bca89a2c970bb7e48b112ef0066815dd0289e5fa9db6ba2a4ebb3bfe0d60c6"
+    },
+    {
+      "source": "microduck/imu_power_fw/platform/ch32v203_port.h",
+      "destination": "platform/ch32v203_port.h",
+      "sha256_before_reorganization": "25bb09dc0cb6d1b95ef89ee03088e543e0f3417f04735b55a25f08c183c5cbd6"
+    },
+    {
+      "source": "microduck/imu_power_fw/platform/ch32v20x_conf.h",
+      "destination": "platform/ch32v20x_conf.h",
+      "sha256_before_reorganization": "ee8715cedb3f021f442e09384a6f0dff62487b3c50cdbc7968514a22ef9da149"
+    },
+    {
+      "source": "microduck/imu_power_fw/README.md",
+      "destination": "README.md",
+      "sha256_before_reorganization": "19a4b113997df53cf89524eb3aa85aa8b96611020912ebcbd3aa418981645c11"
+    },
+    {
+      "source": "microduck/imu_power_fw/src/config.c",
+      "destination": "src/config.c",
+      "sha256_before_reorganization": "ade2caa6aba9050dcc88e6b301e4f6a9099aede972691aca797fbdf8ff3aec31"
+    },
+    {
+      "source": "microduck/imu_power_fw/src/device.c",
+      "destination": "src/device.c",
+      "sha256_before_reorganization": "1bc07ec2ee8de2d6d87f5c86ea47a26a6111098f5e573a2a983d108fd107e256"
+    },
+    {
+      "source": "microduck/imu_power_fw/src/dxl.c",
+      "destination": "src/dxl.c",
+      "sha256_before_reorganization": "ee9981a7affbca34aeff76f27bc50350b74d28e127b481506c6814696d6578c8"
+    },
+    {
+      "source": "microduck/imu_power_fw/src/imu_wire.c",
+      "destination": "src/imu_wire.c",
+      "sha256_before_reorganization": "23e51a8e2d4972a375e9a6a87f82649568a8362bd8900994c7b2f235b4e3f581"
+    },
+    {
+      "source": "microduck/imu_power_fw/src/maintenance.c",
+      "destination": "src/maintenance.c",
+      "sha256_before_reorganization": "47f506c1fd902b712aecef952c0aa3c27f340b0c96cf93674c7f827a9f3806c5"
+    },
+    {
+      "source": "microduck/imu_power_fw/tests/test_core.c",
+      "destination": "tests/test_core.c",
+      "sha256_before_reorganization": "41b69c733863fb86f0c9f1cc3a60cf4d0b52f116e532c31864e82f484adf18e8"
+    },
+    {
+      "source": "imu_to_dxl_v2_microduck_report.md",
+      "destination": "docs/legacy-interface-report.md",
+      "sha256_before_reorganization": "30785c0e6e68017cb708eda8ceddff9dd7914c530a2dc2e6273ba64d6537c61a"
+    },
+    {
+      "source": "microduck/LICENSE",
+      "destination": "LICENSES/upstream-microduck-Apache-2.0.txt",
+      "sha256_before_reorganization": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+    }
+  ]
+}
