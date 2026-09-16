@@ -131,7 +131,7 @@ void imu_power_device_init(imu_power_device_t *device,
     device->config_generation = generation;
     device->runtime_id = device->active_config.device_id;
     device->runtime_baudrate = device->active_config.baudrate;
-    device->diagnostics.firmware_version = 0x0200u;
+    device->diagnostics.firmware_version = 0x0201u;
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }

@@ -16,3 +16,8 @@ CMake 宿主构建可用。原测试包长断言重复计入头部，整理时�
 官方 `size` 工具输出：text 11,072 字节、data 40 字节、BSS 4,264 字节。应用 Flash 链接范围仍为 56 KiB；最后两个配置页保留。
 
 本轮完成编译和软件测试，未执行烧录、实物板卡或舵机运动验收。第三方来源见 `provenance.json`、`vendor/wch-ch32v20x/manifest.json` 和 `THIRD_PARTY.md`。
+
+## 2026-09-16：合并读取失败修复
+
+诊断版本 `0x0201` 修复 DMA 环形索引、Dynamixel 字节填充/CRC 和坏帧恢复。
+定位证据、测试范围和烧录状态见 [合并读取修复记录](uart-recovery-2026-09-16.md)。
