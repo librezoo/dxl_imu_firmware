@@ -70,9 +70,12 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
             out[i] = sample[a - IMU_POWER_DATA_ADDRESS];
         } else if (a >= IMU_POWER_DIAG_ADDRESS && a < IMU_POWER_DIAG_ADDRESS + sizeof(diag)) {
             out[i] = diag[a - IMU_POWER_DIAG_ADDRESS];
+        } else if (a >= IMU_POWER_IMU_CONFIG_ADDRESS &&
+                   a < IMU_POWER_IMU_CONFIG_ADDRESS + sizeof(device->diagnostics.imu_registers)) {
+            out[i] = device->diagnostics.imu_registers[a - IMU_POWER_IMU_CONFIG_ADDRESS];
         } else if (a >= IMU_POWER_CONFIG_ADDRESS && a < IMU_POWER_CONFIG_ADDRESS + sizeof(config)) {
             out[i] = config[a - IMU_POWER_CONFIG_ADDRESS];
-        } else if ((a >= 136u && a < 160u) || (a >= 184u && a < 192u)) {
+        } else if (a >= 136u && a < 160u) {
             out[i] = 0u;
         } else {
             return false;
@@ -131,7 +134,7 @@ void imu_power_device_init(imu_power_device_t *device,
     device->config_generation = generation;
     device->runtime_id = device->active_config.device_id;
     device->runtime_baudrate = device->active_config.baudrate;
-    device->diagnostics.firmware_version = 0x0202u;
+    device->diagnostics.firmware_version = 0x0203u;
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }

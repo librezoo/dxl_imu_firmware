@@ -144,7 +144,7 @@ static void imu_delay_ms(uint32_t delay_ms)
     while ((uint32_t)(systick_ms - start) < delay_ms) {}
 }
 
-static bool imu_init(void)
+static bool imu_init(imu_power_device_t *device)
 {
     uint8_t who;
     who = imu_read_reg(IMU_REG_WHO_AM_I);
@@ -164,6 +164,18 @@ static bool imu_init(void)
     imu_write_reg(IMU_REG_FIFO_CTRL2, 0x00u);
     imu_write_reg(IMU_REG_FIFO_CTRL3, 0x00u);
     imu_write_reg(IMU_REG_FIFO_CTRL4, 0x06u);
+    /* Observe the physical configuration, not just the values we intended
+       to write. The readonly diagnostic tail leaves the 12-byte sample intact. */
+    device->diagnostics.imu_registers[0] = imu_read_reg(IMU_REG_WHO_AM_I);
+    device->diagnostics.imu_registers[1] = imu_read_reg(IMU_REG_CTRL1_XL);
+    device->diagnostics.imu_registers[2] = imu_read_reg(IMU_REG_CTRL2_G);
+    device->diagnostics.imu_registers[3] = imu_read_reg(IMU_REG_CTRL3_C);
+    device->diagnostics.imu_registers[4] = imu_read_reg(0x15u); /* CTRL6: gyro FS */
+    device->diagnostics.imu_registers[5] = imu_read_reg(0x17u); /* CTRL8: accel FS */
+    imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x80u);
+    device->diagnostics.imu_registers[6] = imu_read_reg(IMU_REG_EMB_FUNC_EN_A);
+    device->diagnostics.imu_registers[7] = imu_read_reg(IMU_REG_SFLP_ODR);
+    imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u);
     return true;
 }
 
@@ -306,7 +318,7 @@ void imu_power_ch32_port_init(imu_power_device_t *device)
     IWDG_SetReload(2500u);
     IWDG_ReloadCounter();
     IWDG_Enable();
-    imu_ready = imu_init() ? 1u : 0u;
+    imu_ready = imu_init(device) ? 1u : 0u;
     if (imu_ready) device->diagnostics.status_flags |= (1u << 1);
     else device->diagnostics.status_flags |= (1u << 2);
 }
@@ -368,7 +380,7 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
     }
     if (!imu_ready && systick_ms != last_recovery_ms && (systick_ms % 1000u) == 0u) {
         last_recovery_ms = systick_ms;
-        imu_ready = imu_init() ? 1u : 0u;
+        imu_ready = imu_init(device) ? 1u : 0u;
         if (imu_ready) {
             device->diagnostics.status_flags |= (1u << 1);
             device->diagnostics.status_flags &= (uint16_t)~(1u << 2);

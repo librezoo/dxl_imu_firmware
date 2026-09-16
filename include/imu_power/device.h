@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #define IMU_POWER_DIAG_ADDRESS 160u
+#define IMU_POWER_IMU_CONFIG_ADDRESS 184u
 #define IMU_POWER_CONFIG_ADDRESS 192u
 #define IMU_POWER_MAX_READ 64u
 #define IMU_POWER_CONFIG_CMD_SAVE 0x01u
@@ -28,6 +29,9 @@ typedef struct {
     uint16_t reset_reason;
     uint16_t config_status;
     uint32_t error_count;
+    /* Read back after IMU init: WHO_AM_I, CTRL1, CTRL2, CTRL3, CTRL6,
+       CTRL8, embedded EMB_FUNC_EN_A, embedded SFLP_ODR. */
+    uint8_t imu_registers[8];
 } imu_power_diagnostics_t;
 
 typedef struct {
