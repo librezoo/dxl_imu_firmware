@@ -340,6 +340,10 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
                     tx.DMA_M2M = DMA_M2M_Disable;
                     DMA_Init(DMA1_Channel2, &tx);
                     DMA_ClearFlag(DMA1_FLAG_TC2);
+                    /* TC is initially set. DMA writes DATAR without the
+                       status-read/data-write sequence that clears it, so an
+                       old TC can release the bus before the first CRC ends. */
+                    USART_ClearFlag(USART3, USART_FLAG_TC);
                     USART_DMACmd(USART3, USART_DMAReq_Tx, ENABLE);
                     DMA_Cmd(DMA1_Channel2, ENABLE);
                     while (DMA_GetFlagStatus(DMA1_FLAG_TC2) == RESET) {}
