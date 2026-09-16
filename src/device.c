@@ -57,9 +57,16 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
     uint8_t sample[IMU_POWER_DATA_LENGTH];
     uint8_t diag[24];
     uint8_t config[7];
+    uint8_t gyro_diag[14];
     uint16_t i;
     imu_power_pack_sample(&device->sample, sample);
     diag_read(device, diag);
+    for (i = 0; i < 3u; ++i) {
+        put_u16(&gyro_diag[2u * i], (uint16_t)device->sample.gyro_raw[i]);
+        put_u16(&gyro_diag[6u + 2u * i], (uint16_t)device->sample.gyro_bias_125[i]);
+    }
+    gyro_diag[12] = device->sample.bias_valid ? 1u : 0u;
+    gyro_diag[13] = device->sample.valid ? 1u : 0u;
     config[0] = device->staged_valid ? device->staged_config.device_id : device->active_config.device_id;
     put_u32(&config[1], device->staged_valid ? device->staged_config.baudrate : device->active_config.baudrate);
     config[5] = 0u;
@@ -75,6 +82,8 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
             out[i] = device->diagnostics.imu_registers[a - IMU_POWER_IMU_CONFIG_ADDRESS];
         } else if (a >= IMU_POWER_CONFIG_ADDRESS && a < IMU_POWER_CONFIG_ADDRESS + sizeof(config)) {
             out[i] = config[a - IMU_POWER_CONFIG_ADDRESS];
+        } else if (a >= IMU_POWER_GYRO_DIAG_ADDRESS && a < IMU_POWER_GYRO_DIAG_ADDRESS + sizeof(gyro_diag)) {
+            out[i] = gyro_diag[a - IMU_POWER_GYRO_DIAG_ADDRESS];
         } else if (a >= 136u && a < 160u) {
             out[i] = 0u;
         } else {
@@ -134,7 +143,7 @@ void imu_power_device_init(imu_power_device_t *device,
     device->config_generation = generation;
     device->runtime_id = device->active_config.device_id;
     device->runtime_baudrate = device->active_config.baudrate;
-    device->diagnostics.firmware_version = 0x0203u;
+    device->diagnostics.firmware_version = 0x0204u;
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }

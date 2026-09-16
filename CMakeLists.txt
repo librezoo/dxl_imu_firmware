@@ -30,6 +30,10 @@ add_executable(imu_power_dxl_stream_tests tests/test_dxl_stream.c)
 target_link_libraries(imu_power_dxl_stream_tests PRIVATE imu_power_core)
 add_test(NAME imu_power_dxl_stream_tests COMMAND imu_power_dxl_stream_tests)
 
+add_executable(imu_power_imu_sample_tests tests/test_imu_sample.c)
+target_link_libraries(imu_power_imu_sample_tests PRIVATE imu_power_core)
+add_test(NAME imu_power_imu_sample_tests COMMAND imu_power_imu_sample_tests)
+
 # The MCU SDK is committed with the firmware; no external SDK is required.
 option(IMU_POWER_BUILD_CH32 "Build CH32V203C8U6 firmware" OFF)
 if(IMU_POWER_BUILD_CH32)

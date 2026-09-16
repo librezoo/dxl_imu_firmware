@@ -2,6 +2,25 @@
 
 #include <string.h>
 
+static uint16_t get_u16(const uint8_t *p)
+{
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8u);
+}
+
+static float half_to_float(uint16_t value)
+{
+    unsigned exponent = (value >> 10u) & 0x1fu;
+    unsigned fraction = value & 0x3ffu;
+    float result;
+    if (exponent == 0u) result = (float)fraction * 0x1p-24f;
+    else {
+        union { uint32_t u; float f; } bits;
+        bits.u = ((uint32_t)(exponent + 112u) << 23u) | ((uint32_t)fraction << 13u);
+        result = bits.f;
+    }
+    return (value & 0x8000u) ? -result : result;
+}
+
 static void put_u16(uint8_t *dst, uint16_t value)
 {
     dst[0] = (uint8_t)value;
@@ -29,6 +48,7 @@ bool imu_power_quaternion_valid(const uint16_t quat_half[3])
 {
     unsigned i;
     bool nonzero = false;
+    float norm_sq = 0.0f;
     if (quat_half == NULL) {
         return false;
     }
@@ -40,8 +60,62 @@ bool imu_power_quaternion_valid(const uint16_t quat_half[3])
         if ((quat_half[i] & 0x7FFFu) != 0u) {
             nonzero = true;
         }
+        {
+            float value = half_to_float(quat_half[i]);
+            norm_sq += value * value;
+        }
     }
-    return nonzero;
+    /* Match robotd's finite/norm check and its all-zero startup sentinel. */
+    return nonzero && norm_sq <= 1.02f;
+}
+
+void imu_power_sample_gyro(imu_power_sample_t *sample, imu_power_sample_clock_t *clock,
+                           const uint8_t bytes[6], uint32_t now_ms)
+{
+    unsigned i;
+    for (i = 0; i < 3u; ++i) sample->gyro_raw[i] = (int16_t)get_u16(&bytes[2u * i]);
+    clock->gyro_ms = now_ms;
+    clock->gyro_seen = true;
+}
+
+void imu_power_sample_fifo(imu_power_sample_t *sample, imu_power_sample_clock_t *clock,
+                           const uint8_t fifo[7], uint32_t now_ms)
+{
+    unsigned i;
+    switch (fifo[0] >> 3u) {
+    case 0x13u: /* SFLP game rotation: IEEE binary16 x/y/z. */
+        for (i = 0; i < 3u; ++i) sample->quat_half[i] = get_u16(&fifo[1u + 2u * i]);
+        if (imu_power_quaternion_valid(sample->quat_half)) {
+            clock->quat_ms = now_ms;
+            clock->quat_seen = true;
+            ++sample->sample_counter;
+        } else {
+            memset(sample->quat_half, 0, sizeof(sample->quat_half));
+            clock->quat_seen = false;
+        }
+        break;
+    case 0x16u: /* SFLP gyro bias: signed counts, 4.375 mdps/LSB. */
+        for (i = 0; i < 3u; ++i) sample->gyro_bias_125[i] = (int16_t)get_u16(&fifo[1u + 2u * i]);
+        sample->bias_valid = true;
+        break;
+    default:
+        break;
+    }
+}
+
+void imu_power_sample_age(imu_power_sample_t *sample, const imu_power_sample_clock_t *clock,
+                          uint32_t now_ms)
+{
+    uint32_t gyro_age, quat_age, age_ms;
+    sample->valid = clock->gyro_seen && clock->quat_seen;
+    if (!sample->valid) {
+        sample->age_us = UINT32_MAX;
+        return;
+    }
+    gyro_age = now_ms - clock->gyro_ms;
+    quat_age = now_ms - clock->quat_ms;
+    age_ms = gyro_age > quat_age ? gyro_age : quat_age;
+    sample->age_us = age_ms > UINT32_MAX / 1000u ? UINT32_MAX : age_ms * 1000u;
 }
 
 uint16_t imu_power_float_to_half(float value)

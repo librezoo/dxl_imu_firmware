@@ -23,6 +23,9 @@
 #define IMU_REG_CTRL1_XL 0x10u
 #define IMU_REG_CTRL2_G 0x11u
 #define IMU_REG_CTRL3_C 0x12u
+#define IMU_REG_CTRL6 0x15u
+#define IMU_REG_CTRL8 0x17u
+#define IMU_REG_STATUS 0x1Eu
 #define IMU_REG_FUNC_CFG_ACCESS 0x01u
 #define IMU_REG_FIFO_CTRL1 0x07u
 #define IMU_REG_FIFO_CTRL2 0x08u
@@ -50,6 +53,7 @@ static uint16_t debug_line_len;
 static uint32_t last_sample_ms;
 static uint32_t last_recovery_ms;
 static volatile uint8_t imu_sample_pending;
+static imu_power_sample_clock_t imu_sample_clock;
 
 void SysTick_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void SysTick_Handler(void)
@@ -147,17 +151,24 @@ static void imu_delay_ms(uint32_t delay_ms)
 static bool imu_init(imu_power_device_t *device)
 {
     uint8_t who;
+    uint32_t counter = device->sample.sample_counter;
+    memset(&imu_sample_clock, 0, sizeof(imu_sample_clock));
+    memset(&device->sample, 0, sizeof(device->sample));
+    device->sample.sample_counter = counter;
+    device->sample.age_us = UINT32_MAX;
+    imu_power_device_set_sample(device, &device->sample);
     who = imu_read_reg(IMU_REG_WHO_AM_I);
     if (who != IMU_WHO_AM_I) return false;
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x04u); /* software power-on reset */
     imu_delay_ms(30u);
     if (imu_read_reg(IMU_REG_WHO_AM_I) != IMU_WHO_AM_I) return false;
     imu_write_reg(IMU_REG_CTRL3_C, 0x44u); /* BDU + IF_INC */
-    imu_write_reg(IMU_REG_CTRL1_XL, 0x04u); /* 30 Hz, high performance */
-    imu_write_reg(IMU_REG_CTRL2_G, 0x04u); /* 30 Hz, high performance */
+    imu_write_reg(IMU_REG_CTRL6, 0x02u); /* +/-500 dps: robotd uses 17.5 mdps/LSB */
+    imu_write_reg(IMU_REG_CTRL1_XL, 0x06u); /* 120 Hz, high performance */
+    imu_write_reg(IMU_REG_CTRL2_G, 0x06u); /* 120 Hz, high performance */
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x80u); /* embedded-function bank */
-    imu_write_reg(IMU_REG_EMB_FUNC_FIFO_EN_A, 0x02u); /* game rotation to FIFO */
-    imu_write_reg(IMU_REG_SFLP_ODR, 0x08u); /* SFLP game rotation at 30 Hz */
+    imu_write_reg(IMU_REG_EMB_FUNC_FIFO_EN_A, 0x22u); /* game rotation + gyro bias */
+    imu_write_reg(IMU_REG_SFLP_ODR, 0x18u); /* SFLP at 120 Hz, above the host's 50 Hz */
     imu_write_reg(IMU_REG_EMB_FUNC_EN_A, 0x02u); /* enable game rotation */
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u); /* main bank */
     imu_write_reg(IMU_REG_FIFO_CTRL1, 0x01u);
@@ -170,38 +181,43 @@ static bool imu_init(imu_power_device_t *device)
     device->diagnostics.imu_registers[1] = imu_read_reg(IMU_REG_CTRL1_XL);
     device->diagnostics.imu_registers[2] = imu_read_reg(IMU_REG_CTRL2_G);
     device->diagnostics.imu_registers[3] = imu_read_reg(IMU_REG_CTRL3_C);
-    device->diagnostics.imu_registers[4] = imu_read_reg(0x15u); /* CTRL6: gyro FS */
-    device->diagnostics.imu_registers[5] = imu_read_reg(0x17u); /* CTRL8: accel FS */
+    device->diagnostics.imu_registers[4] = imu_read_reg(IMU_REG_CTRL6);
+    device->diagnostics.imu_registers[5] = imu_read_reg(IMU_REG_CTRL8);
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x80u);
     device->diagnostics.imu_registers[6] = imu_read_reg(IMU_REG_EMB_FUNC_EN_A);
     device->diagnostics.imu_registers[7] = imu_read_reg(IMU_REG_SFLP_ODR);
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u);
-    return true;
+    return device->diagnostics.imu_registers[0] == IMU_WHO_AM_I &&
+           device->diagnostics.imu_registers[1] == 0x06u &&
+           device->diagnostics.imu_registers[2] == 0x06u &&
+           (device->diagnostics.imu_registers[3] & 0x44u) == 0x44u &&
+           (device->diagnostics.imu_registers[4] & 0x0Fu) == 0x02u &&
+           (device->diagnostics.imu_registers[6] & 0x02u) != 0u &&
+           (device->diagnostics.imu_registers[7] & 0x38u) == 0x18u;
 }
 
 static void sample_update(imu_power_device_t *device)
 {
     uint8_t bytes[6];
     uint8_t fifo[7];
+    uint8_t fifo_status[2];
+    uint16_t count;
     imu_power_sample_t sample;
-    static uint32_t counter;
     sample = device->sample;
-    imu_read_burst(IMU_REG_OUTX_L_G, bytes, sizeof(bytes));
-    sample.gyro_raw[0] = (int16_t)((uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8u));
-    sample.gyro_raw[1] = (int16_t)((uint16_t)bytes[2] | ((uint16_t)bytes[3] << 8u));
-    sample.gyro_raw[2] = (int16_t)((uint16_t)bytes[4] | ((uint16_t)bytes[5] << 8u));
-    if ((imu_read_reg(IMU_REG_FIFO_STATUS2) & 0x01u) != 0u ||
-        imu_read_reg(IMU_REG_FIFO_STATUS1) != 0u) {
-        imu_read_burst(IMU_REG_FIFO_DATA_OUT_TAG, fifo, sizeof(fifo));
-        if ((fifo[0] >> 3u) == 0x13u) {
-            sample.quat_half[0] = (uint16_t)fifo[1] | ((uint16_t)fifo[2] << 8u);
-            sample.quat_half[1] = (uint16_t)fifo[3] | ((uint16_t)fifo[4] << 8u);
-            sample.quat_half[2] = (uint16_t)fifo[5] | ((uint16_t)fifo[6] << 8u);
-        }
+    if ((imu_read_reg(IMU_REG_STATUS) & 0x02u) != 0u) {
+        imu_read_burst(IMU_REG_OUTX_L_G, bytes, sizeof(bytes));
+        imu_power_sample_gyro(&sample, &imu_sample_clock, bytes, systick_ms);
     }
-    sample.sample_counter = ++counter;
-    sample.age_us = 0u;
-    sample.valid = imu_power_quaternion_valid(sample.quat_half);
+    imu_read_burst(IMU_REG_FIFO_STATUS1, fifo_status, sizeof(fifo_status));
+    count = (uint16_t)fifo_status[0] | ((uint16_t)(fifo_status[1] & 1u) << 8u);
+    if ((fifo_status[1] & 0x48u) != 0u) device->diagnostics.status_flags |= 8u;
+    /* Drain the bounded hardware FIFO so a polling delay cannot make us
+       publish an old quaternion while claiming it was just sampled. */
+    while (count-- != 0u) {
+        imu_read_burst(IMU_REG_FIFO_DATA_OUT_TAG, fifo, sizeof(fifo));
+        imu_power_sample_fifo(&sample, &imu_sample_clock, fifo, systick_ms);
+    }
+    imu_power_sample_age(&sample, &imu_sample_clock, systick_ms);
     imu_power_device_set_sample(device, &sample);
 }
 
@@ -372,8 +388,7 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
         ++device->diagnostics.error_count;
         device->diagnostics.last_error = IMU_POWER_DXL_DATA_LENGTH;
     }
-    if (imu_ready && (imu_sample_pending ||
-        (systick_ms != last_sample_ms && (systick_ms % 10u) == 0u))) {
+    if (imu_ready && (imu_sample_pending || systick_ms != last_sample_ms)) {
         imu_sample_pending = 0u;
         last_sample_ms = systick_ms;
         sample_update(device);

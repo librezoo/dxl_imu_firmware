@@ -48,7 +48,10 @@ int main(void)
     imu_power_config_storage_t storage = { slot_read, slot_write, NULL };
     imu_power_device_t device;
     imu_power_dxl_frame_t frame;
-    imu_power_sample_t sample = {{1, -2, 3}, {0x3c00u, 0x0000u, 0xbc00u}, 7u, 1000u, true};
+    imu_power_sample_t sample = {
+        .gyro_raw = {1, -2, 3}, .quat_half = {0x3800u, 0x0000u, 0xb800u},
+        .sample_counter = 7u, .age_us = 1000u, .valid = true
+    };
     uint8_t packet[128], scratch[128], response[128], parameters[32];
     size_t packet_length, response_length;
 
