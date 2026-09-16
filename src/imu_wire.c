@@ -27,6 +27,20 @@ static void put_u16(uint8_t *dst, uint16_t value)
     dst[1] = (uint8_t)(value >> 8u);
 }
 
+static int16_t gyro_output_count(const imu_power_sample_t *sample, unsigned axis)
+{
+    int32_t value = sample->gyro_raw[axis];
+    if (sample->bias_valid) {
+        /* The SFLP estimate is always 4.375 mdps/LSB. The wire gyro is
+           17.5 mdps/LSB. Round only after subtraction, preserving real motion. */
+        value = value * 4 - sample->gyro_bias_125[axis];
+        value = (value + (value >= 0 ? 2 : -2)) / 4;
+    }
+    if (value > INT16_MAX) value = INT16_MAX;
+    if (value < INT16_MIN) value = INT16_MIN;
+    return (int16_t)value;
+}
+
 void imu_power_pack_sample(const imu_power_sample_t *sample,
                            uint8_t out[IMU_POWER_DATA_LENGTH])
 {
@@ -39,7 +53,7 @@ void imu_power_pack_sample(const imu_power_sample_t *sample,
         return;
     }
     for (i = 0; i < 3u; ++i) {
-        put_u16(&out[i * 2u], (uint16_t)sample->gyro_raw[i]);
+        put_u16(&out[i * 2u], (uint16_t)gyro_output_count(sample, i));
         put_u16(&out[6u + i * 2u], sample->quat_half[i]);
     }
 }

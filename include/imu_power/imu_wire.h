@@ -33,6 +33,8 @@ void imu_power_sample_fifo(imu_power_sample_t *sample, imu_power_sample_clock_t 
 void imu_power_sample_age(imu_power_sample_t *sample, const imu_power_sample_clock_t *clock,
                           uint32_t now_ms);
 
+/* Wire gyro is in 500 dps counts with the on-chip SFLP bias removed when
+   available. gyro_raw and gyro_bias_125 remain separately observable. */
 void imu_power_pack_sample(const imu_power_sample_t *sample,
                            uint8_t out[IMU_POWER_DATA_LENGTH]);
 bool imu_power_quaternion_valid(const uint16_t quat_half[3]);

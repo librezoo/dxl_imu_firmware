@@ -34,6 +34,8 @@ int main(void)
     imu_power_sample_gyro(&sample, &clock, gyro, 113u);
     imu_power_sample_age(&sample, &clock, 113u);
     assert(sample.age_us == 1000u);
+    imu_power_pack_sample(&sample, out);
+    assert(memcmp(out, gyro, 6u) == 0); /* No estimate yet: retain the measurement. */
 
     imu_power_sample_fifo(&sample, &clock, bias, 113u);
     assert(sample.bias_valid && sample.gyro_bias_125[0] == 4 && sample.gyro_bias_125[1] == -8);
@@ -41,8 +43,22 @@ int main(void)
     imu_power_sample_fifo(&sample, &clock, (uint8_t[]){0xf8,1,2,3,4,5,6}, 114u);
     assert(sample.sample_counter == 2u && clock.quat_ms == 112u);
     imu_power_pack_sample(&sample, out);
-    assert(memcmp(out, gyro, 6u) == 0);
+    assert(memcmp(out, (uint8_t[]){0,0,0,0,0,0}, 6u) == 0);
     assert(memcmp(out + 6u, quaternion + 1u, 6u) == 0);
+    /* Correction subtracts the estimate, not the measurement itself: real
+       angular velocity survives, and the original readings remain intact. */
+    imu_power_sample_gyro(&sample, &clock, (uint8_t[]){100,0,0x38,0xff,15,0}, 114u);
+    imu_power_pack_sample(&sample, out);
+    assert(memcmp(out, (uint8_t[]){99,0,0x3a,0xff,12,0}, 6u) == 0);
+    assert(sample.gyro_raw[0] == 100 && sample.gyro_raw[1] == -200);
+    sample.gyro_raw[0] = 1; sample.gyro_bias_125[0] = 6;
+    sample.gyro_raw[1] = -1; sample.gyro_bias_125[1] = -6;
+    imu_power_pack_sample(&sample, out);
+    assert(out[0] == 0xffu && out[1] == 0xffu && out[2] == 1u && out[3] == 0u);
+    sample.gyro_raw[0] = INT16_MAX; sample.gyro_bias_125[0] = INT16_MIN;
+    sample.gyro_raw[1] = INT16_MIN; sample.gyro_bias_125[1] = INT16_MAX;
+    imu_power_pack_sample(&sample, out);
+    assert(out[0] == 0xffu && out[1] == 0x7fu && out[2] == 0u && out[3] == 0x80u);
 
     assert(!imu_power_quaternion_valid((uint16_t[]){0x3c00u,0,0x3c00u}));
     assert(!imu_power_quaternion_valid((uint16_t[]){0x7c01u,0,0}));
