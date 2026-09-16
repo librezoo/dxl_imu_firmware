@@ -95,3 +95,12 @@ the MicroDuck `SYNC_READ(124,12)` contract, binary16 validation, and the
 default configuration path. The hardware port samples the LSM6DSV16X gyro and
 consumes tagged SFLP quaternion FIFO records; an absent or invalid SFLP record
 keeps the quaternion block at zero until the sensor is ready.
+
+From diagnostic version `0x0206`, the gyro is explicitly configured at ±500 dps.
+The 12-byte sample uses 17.5 mdps/LSB and subtracts the on-chip SFLP bias when
+available; the quaternion is forwarded without a mounting rotation or leveling.
+Read-only diagnostics retain the original gyro, bias and initialization register
+readback. The sample counter advances on fresh SFLP records, and sample age is
+reported rather than reset on every poll. See
+[sensor validation](sensor-validation-2026-09-16.md) for the measured behavior,
+diagnostic fields and remaining validation scope.
