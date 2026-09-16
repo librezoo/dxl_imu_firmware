@@ -77,6 +77,21 @@ int main(void)
     clock.gyro_ms = clock.quat_ms = 0u;
     imu_power_sample_age(&sample, &clock, UINT32_MAX / 1000u + 1u);
     assert(sample.age_us == UINT32_MAX);
+    /* IEEE binary16 rounding, including carry and ties-to-even boundaries. */
+    assert(imu_power_float_to_half(0.49999f) == 0x3800u);
+    assert(imu_power_float_to_half(1.9999f) == 0x4000u);
+    assert(imu_power_float_to_half(-1.9999f) == 0xc000u);
+    assert(imu_power_float_to_half(0x1p-24f) == 1u);
+    assert(imu_power_float_to_half(0x1p-25f) == 0u);
+    assert(imu_power_float_to_half(0x1.8p-24f) == 2u);
+    assert(imu_power_float_to_half(65504.0f) == 0x7bffu);
+    assert(imu_power_float_to_half(65536.0f) == 0x7c00u);
+    assert(imu_power_float_to_half(-0.0f) == 0x8000u);
+    {
+        union { uint32_t u; float f; } value;
+        value.u = 0x7fc00001u;
+        assert(imu_power_float_to_half(value.f) == 0x7e00u);
+    }
     puts("imu_power_imu_sample_tests: PASS");
     return 0;
 }

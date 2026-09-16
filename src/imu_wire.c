@@ -135,10 +135,13 @@ void imu_power_sample_age(imu_power_sample_t *sample, const imu_power_sample_clo
 uint16_t imu_power_float_to_half(float value)
 {
     union { float f; uint32_t u; } bits;
-    uint32_t sign, mantissa;
+    uint32_t sign, mantissa, rounded, remainder, halfway;
     int32_t exponent;
     bits.f = value;
     sign = (bits.u >> 16u) & 0x8000u;
+    if (((bits.u >> 23u) & 0xFFu) == 0xFFu) {
+        return (uint16_t)(sign | 0x7C00u | ((bits.u & 0x7FFFFFu) ? 0x0200u : 0u));
+    }
     exponent = (int32_t)((bits.u >> 23u) & 0xFFu) - 127 + 15;
     mantissa = bits.u & 0x7FFFFFu;
     if (exponent <= 0) {
@@ -146,12 +149,19 @@ uint16_t imu_power_float_to_half(float value)
             return (uint16_t)sign;
         }
         mantissa |= 0x800000u;
-        return (uint16_t)(sign | ((mantissa >> (14 - exponent)) +
-            ((mantissa >> (13 - exponent)) & 1u)));
+        rounded = mantissa >> (14 - exponent);
+        halfway = 1u << (13 - exponent);
+        remainder = mantissa & ((halfway << 1u) - 1u);
+        if (remainder > halfway || (remainder == halfway && (rounded & 1u))) ++rounded;
+        return (uint16_t)(sign | rounded);
     }
     if (exponent >= 31) {
-        return (uint16_t)(sign | 0x7C00u | (mantissa != 0u ? 0x0200u : 0u));
+        return (uint16_t)(sign | 0x7C00u);
     }
-    return (uint16_t)(sign | ((uint32_t)exponent << 10u) |
-                      ((mantissa + 0x1000u) >> 13u));
+    /* Add the rounding carry to the combined exponent/mantissa. OR-ing it
+       loses a carry at boundaries such as 0.49999 -> 0.5 or 1.9999 -> 2. */
+    rounded = ((uint32_t)exponent << 10u) | (mantissa >> 13u);
+    remainder = mantissa & 0x1FFFu;
+    if (remainder > 0x1000u || (remainder == 0x1000u && (rounded & 1u))) ++rounded;
+    return (uint16_t)(sign | rounded);
 }
