@@ -18,6 +18,10 @@ target_link_libraries(imu_power_core_tests PRIVATE imu_power_core)
 enable_testing()
 add_test(NAME imu_power_core_tests COMMAND imu_power_core_tests)
 
+add_executable(imu_power_dma_ring_tests tests/test_dma_ring.c)
+target_link_libraries(imu_power_dma_ring_tests PRIVATE imu_power_core)
+add_test(NAME imu_power_dma_ring_tests COMMAND imu_power_dma_ring_tests)
+
 # The MCU SDK is committed with the firmware; no external SDK is required.
 option(IMU_POWER_BUILD_CH32 "Build CH32V203C8U6 firmware" OFF)
 if(IMU_POWER_BUILD_CH32)

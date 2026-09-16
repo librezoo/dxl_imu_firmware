@@ -17,7 +17,7 @@
 #define CONFIG_SLOT0_ADDR 0x0800E000u
 #define CONFIG_SLOT1_ADDR 0x0800F000u
 #define CONFIG_PAGE_SIZE 4096u
-#define DXL_RX_SIZE 512u
+#define DXL_RX_SIZE IMU_POWER_CH32_RX_SIZE
 #define DXL_TX_SIZE 512u
 #define IMU_REG_WHO_AM_I 0x0Fu
 #define IMU_REG_CTRL1_XL 0x10u
@@ -316,7 +316,7 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
 {
     debug_poll(device);
     {
-        uint16_t dma_head = (uint16_t)(DXL_RX_SIZE - DMA1_Channel3->CNTR);
+        uint16_t dma_head = imu_power_ch32_rx_head((uint16_t)DMA1_Channel3->CNTR);
         while (dxl_rx_tail != dma_head) {
             uint8_t value = dxl_dma_rx[dxl_rx_tail];
             dxl_rx_tail = (uint16_t)((dxl_rx_tail + 1u) % DXL_RX_SIZE);
