@@ -39,10 +39,9 @@
 
 static uint8_t dxl_dma_rx[DXL_RX_SIZE];
 static uint16_t dxl_rx_tail;
-static uint8_t dxl_packet[DXL_RX_SIZE];
+static imu_power_dxl_stream_t dxl_rx;
 static uint8_t dxl_scratch[DXL_RX_SIZE];
 static uint8_t dxl_response[DXL_TX_SIZE];
-static uint16_t dxl_packet_len;
 static uint32_t dxl_last_rx_ms;
 static volatile uint32_t systick_ms;
 static uint8_t imu_ready;
@@ -319,53 +318,41 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
         uint16_t dma_head = imu_power_ch32_rx_head((uint16_t)DMA1_Channel3->CNTR);
         while (dxl_rx_tail != dma_head) {
             uint8_t value = dxl_dma_rx[dxl_rx_tail];
+            imu_power_dxl_frame_t frame;
             dxl_rx_tail = (uint16_t)((dxl_rx_tail + 1u) % DXL_RX_SIZE);
             dxl_last_rx_ms = systick_ms;
-            dxl_packet[dxl_packet_len++] = value;
-            if ((dxl_packet_len == 1u && dxl_packet[0] != 0xFFu) ||
-                (dxl_packet_len == 2u && dxl_packet[1] != 0xFFu) ||
-                (dxl_packet_len == 3u && dxl_packet[2] != 0xFDu) ||
-                (dxl_packet_len == 4u && dxl_packet[3] != 0u)) {
-                dxl_packet_len = 0u;
-                continue;
-            }
-            if (dxl_packet_len >= 10u) {
-                imu_power_dxl_frame_t frame;
-                if (imu_power_dxl_parse(dxl_packet, dxl_packet_len, &frame, dxl_scratch, sizeof(dxl_scratch))) {
-                    size_t response_length = imu_power_device_handle(device, &frame, dxl_response, sizeof(dxl_response));
-                    if (response_length != 0u) {
-                        DMA_InitTypeDef tx = {0};
-                        dxl_direction(true);
-                        DMA_DeInit(DMA1_Channel2);
-                        tx.DMA_PeripheralBaseAddr = (uint32_t)&USART3->DATAR;
-                        tx.DMA_MemoryBaseAddr = (uint32_t)dxl_response;
-                        tx.DMA_DIR = DMA_DIR_PeripheralDST;
-                        tx.DMA_BufferSize = (uint16_t)response_length;
-                        tx.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
-                        tx.DMA_MemoryInc = DMA_MemoryInc_Enable;
-                        tx.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
-                        tx.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
-                        tx.DMA_Mode = DMA_Mode_Normal;
-                        tx.DMA_Priority = DMA_Priority_VeryHigh;
-                        tx.DMA_M2M = DMA_M2M_Disable;
-                        DMA_Init(DMA1_Channel2, &tx);
-                        DMA_ClearFlag(DMA1_FLAG_TC2);
-                        USART_DMACmd(USART3, USART_DMAReq_Tx, ENABLE);
-                        DMA_Cmd(DMA1_Channel2, ENABLE);
-                        while (DMA_GetFlagStatus(DMA1_FLAG_TC2) == RESET) {}
-                        while (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET) {}
-                        DMA_Cmd(DMA1_Channel2, DISABLE);
-                        USART_DMACmd(USART3, USART_DMAReq_Tx, DISABLE);
-                        dxl_direction(false);
-                    }
-                    dxl_packet_len = 0u;
+            if (imu_power_dxl_stream_feed(&dxl_rx, value, &frame, dxl_scratch, sizeof(dxl_scratch))) {
+                size_t response_length = imu_power_device_handle(device, &frame, dxl_response, sizeof(dxl_response));
+                if (response_length != 0u) {
+                    DMA_InitTypeDef tx = {0};
+                    dxl_direction(true);
+                    DMA_DeInit(DMA1_Channel2);
+                    tx.DMA_PeripheralBaseAddr = (uint32_t)&USART3->DATAR;
+                    tx.DMA_MemoryBaseAddr = (uint32_t)dxl_response;
+                    tx.DMA_DIR = DMA_DIR_PeripheralDST;
+                    tx.DMA_BufferSize = (uint16_t)response_length;
+                    tx.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+                    tx.DMA_MemoryInc = DMA_MemoryInc_Enable;
+                    tx.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+                    tx.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+                    tx.DMA_Mode = DMA_Mode_Normal;
+                    tx.DMA_Priority = DMA_Priority_VeryHigh;
+                    tx.DMA_M2M = DMA_M2M_Disable;
+                    DMA_Init(DMA1_Channel2, &tx);
+                    DMA_ClearFlag(DMA1_FLAG_TC2);
+                    USART_DMACmd(USART3, USART_DMAReq_Tx, ENABLE);
+                    DMA_Cmd(DMA1_Channel2, ENABLE);
+                    while (DMA_GetFlagStatus(DMA1_FLAG_TC2) == RESET) {}
+                    while (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET) {}
+                    DMA_Cmd(DMA1_Channel2, DISABLE);
+                    USART_DMACmd(USART3, USART_DMAReq_Tx, DISABLE);
+                    dxl_direction(false);
                 }
             }
-            if (dxl_packet_len >= DXL_RX_SIZE) dxl_packet_len = 0u;
         }
     }
-    if (dxl_packet_len != 0u && (uint32_t)(systick_ms - dxl_last_rx_ms) > 30u) {
-        dxl_packet_len = 0u;
+    if (dxl_rx.length != 0u && (uint32_t)(systick_ms - dxl_last_rx_ms) > 30u) {
+        dxl_rx.length = 0u;
         ++device->diagnostics.error_count;
         device->diagnostics.last_error = IMU_POWER_DXL_DATA_LENGTH;
     }

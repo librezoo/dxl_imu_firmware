@@ -102,3 +102,48 @@ size_t imu_power_dxl_build_status(uint8_t id, uint8_t error,
     out[wire_length++] = (uint8_t)(crc >> 8u);
     return wire_length;
 }
+
+static const uint8_t packet_header[] = {0xFFu, 0xFFu, 0xFDu, 0u};
+
+static void keep_header_suffix(imu_power_dxl_stream_t *stream)
+{
+    size_t keep = stream->length < sizeof(packet_header) ? stream->length : sizeof(packet_header);
+    while (keep != 0u &&
+           memcmp(&stream->packet[stream->length - keep], packet_header, keep) != 0) --keep;
+    memmove(stream->packet, &stream->packet[stream->length - keep], keep);
+    stream->length = keep;
+}
+
+bool imu_power_dxl_stream_feed(imu_power_dxl_stream_t *stream, uint8_t byte,
+                               imu_power_dxl_frame_t *frame,
+                               uint8_t *scratch, size_t scratch_size)
+{
+    uint16_t declared;
+    bool parsed;
+    if (stream->length >= sizeof(stream->packet)) stream->length = 0u;
+    stream->packet[stream->length++] = byte;
+    if (stream->length <= sizeof(packet_header)) {
+        /* Keep an overlapping header prefix, e.g. FF FF FF FD 00. */
+        keep_header_suffix(stream);
+        return false;
+    }
+    if (stream->length < 7u) return false;
+    declared = (uint16_t)stream->packet[5] | ((uint16_t)stream->packet[6] << 8u);
+    if (declared < 3u || (size_t)declared + 7u > sizeof(stream->packet)) {
+        keep_header_suffix(stream);
+        return false;
+    }
+    if (stream->length == (size_t)declared + 7u) {
+        parsed = imu_power_dxl_parse(stream->packet, stream->length, frame, scratch, scratch_size);
+        /* Check CRC before looking for a new header: CRC bytes are not stuffed
+           and may finish an apparent header at the end of a valid packet. */
+        if (parsed) stream->length = 0u;
+        else keep_header_suffix(stream);
+        return parsed;
+    }
+    /* Stuffed body data contains FF FF FD FD, never FF FF FD 00. Recover from
+       a damaged length without waiting for an idle bus or filling the buffer. */
+    if (memcmp(&stream->packet[stream->length - sizeof(packet_header)],
+               packet_header, sizeof(packet_header)) == 0) keep_header_suffix(stream);
+    return false;
+}

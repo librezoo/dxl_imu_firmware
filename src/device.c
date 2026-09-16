@@ -155,6 +155,8 @@ size_t imu_power_device_handle(imu_power_device_t *device,
     uint8_t payload[IMU_POWER_MAX_READ];
     bool addressed;
     if (device == NULL || frame == NULL || response == NULL) return 0u;
+    /* Status packets belong to the controller, including a local TX echo. */
+    if (frame->instruction == IMU_POWER_DXL_STATUS) return 0u;
     addressed = frame->broadcast || frame->id == device->runtime_id;
     if (!addressed && frame->instruction != IMU_POWER_DXL_SYNC_READ) return 0u;
     switch (frame->instruction) {
