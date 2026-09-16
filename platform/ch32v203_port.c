@@ -168,7 +168,9 @@ static bool imu_init(imu_power_device_t *device)
     imu_write_reg(IMU_REG_CTRL2_G, 0x06u); /* 120 Hz, high performance */
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x80u); /* embedded-function bank */
     imu_write_reg(IMU_REG_EMB_FUNC_FIFO_EN_A, 0x22u); /* game rotation + gyro bias */
-    imu_write_reg(IMU_REG_SFLP_ODR, 0x18u); /* SFLP at 120 Hz, above the host's 50 Hz */
+    /* SFLP_ODR bits 6,1,0 must stay one (datasheet table 323). Update only
+       ODR[5:3]; a whole-byte 0x18 write incorrectly clears the reset bits. */
+    imu_write_reg(IMU_REG_SFLP_ODR, (uint8_t)((imu_read_reg(IMU_REG_SFLP_ODR) & 0xC7u) | 0x18u));
     imu_write_reg(IMU_REG_EMB_FUNC_EN_A, 0x02u); /* enable game rotation */
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u); /* main bank */
     imu_write_reg(IMU_REG_FIFO_CTRL1, 0x01u);
@@ -193,7 +195,7 @@ static bool imu_init(imu_power_device_t *device)
            (device->diagnostics.imu_registers[3] & 0x44u) == 0x44u &&
            (device->diagnostics.imu_registers[4] & 0x0Fu) == 0x02u &&
            (device->diagnostics.imu_registers[6] & 0x02u) != 0u &&
-           (device->diagnostics.imu_registers[7] & 0x38u) == 0x18u;
+           device->diagnostics.imu_registers[7] == 0x5Bu;
 }
 
 static void sample_update(imu_power_device_t *device)
