@@ -9,7 +9,8 @@ static size_t unstuff(const uint8_t *in, size_t length, uint8_t *out, size_t cap
         if (n >= capacity) return 0;
         out[n++] = in[i];
         if (n >= 3u && out[n - 3u] == 0xFFu && out[n - 2u] == 0xFFu &&
-            out[n - 1u] == 0xFDu && i + 1u < length && in[i + 1u] == 0xFDu) {
+            out[n - 1u] == 0xFDu) {
+            if (i + 1u >= length || in[i + 1u] != 0xFDu) return 0;
             ++i;
         }
     }
@@ -55,18 +56,21 @@ bool imu_power_dxl_parse(const uint8_t *packet, size_t packet_length,
         packet[0] != 0xFFu || packet[1] != 0xFFu || packet[2] != 0xFDu || packet[3] != 0u) {
         return false;
     }
-    unstuffed_length = unstuff(packet, packet_length, scratch, scratch_size);
-    if (unstuffed_length < 10u) return false;
-    declared = (uint16_t)scratch[5] | ((uint16_t)scratch[6] << 8u);
-    if ((size_t)declared + 7u != unstuffed_length || declared < 3u) return false;
-    received = (uint16_t)scratch[unstuffed_length - 2u] |
-               ((uint16_t)scratch[unstuffed_length - 1u] << 8u);
-    calculated = imu_power_dxl_crc16(scratch, unstuffed_length - 2u);
+    /* Protocol 2 length and CRC describe the stuffed wire packet. Only the
+       instruction/parameter area is unstuffed, after validating both. */
+    declared = (uint16_t)packet[5] | ((uint16_t)packet[6] << 8u);
+    if ((size_t)declared + 7u != packet_length || declared < 3u ||
+        packet_length > IMU_POWER_DXL_MAX_PACKET) return false;
+    received = (uint16_t)packet[packet_length - 2u] |
+               ((uint16_t)packet[packet_length - 1u] << 8u);
+    calculated = imu_power_dxl_crc16(packet, packet_length - 2u);
     if (received != calculated) return false;
-    frame->id = scratch[4];
-    frame->instruction = scratch[7];
-    frame->parameters = &scratch[8];
-    frame->parameter_length = declared - 3u;
+    unstuffed_length = unstuff(&packet[7], declared - 2u, scratch, scratch_size);
+    if (unstuffed_length == 0u) return false;
+    frame->id = packet[4];
+    frame->instruction = scratch[0];
+    frame->parameters = &scratch[1];
+    frame->parameter_length = unstuffed_length - 1u;
     frame->broadcast = frame->id == IMU_POWER_DXL_BROADCAST;
     return true;
 }
@@ -78,20 +82,23 @@ size_t imu_power_dxl_build_status(uint8_t id, uint8_t error,
     uint8_t raw[IMU_POWER_DXL_MAX_PACKET];
     uint16_t length;
     uint16_t crc;
-    size_t raw_length, stuffed_length;
-    if (payload_length > IMU_POWER_DXL_MAX_PACKET - 16u || out == NULL) return 0;
-    raw[0] = 0xFFu; raw[1] = 0xFFu; raw[2] = 0xFDu; raw[3] = 0u;
-    raw[4] = id;
-    length = (uint16_t)(payload_length + 4u);
-    raw[5] = (uint8_t)length; raw[6] = (uint8_t)(length >> 8u);
-    raw[7] = 0x55u; raw[8] = error;
-    if (payload_length != 0u && payload != NULL) memcpy(&raw[9], payload, payload_length);
-    raw_length = 9u + payload_length;
-    crc = imu_power_dxl_crc16(raw, raw_length);
-    raw[raw_length++] = (uint8_t)crc;
-    raw[raw_length++] = (uint8_t)(crc >> 8u);
-    if (out_capacity < 9u) return 0;
-    memcpy(out, raw, 4u);
-    stuffed_length = stuff(&raw[4], raw_length - 4u, &out[4], out_capacity - 4u);
-    return stuffed_length == 0u ? 0u : stuffed_length + 4u;
+    size_t stuffed_length, wire_length;
+    if (payload_length > IMU_POWER_DXL_MAX_PACKET - 16u || out == NULL ||
+        (payload_length != 0u && payload == NULL) || out_capacity < 11u) return 0;
+    if (out_capacity > IMU_POWER_DXL_MAX_PACKET) out_capacity = IMU_POWER_DXL_MAX_PACKET;
+    raw[0] = 0x55u; raw[1] = error;
+    if (payload_length != 0u) memcpy(&raw[2], payload, payload_length);
+    /* Keep the header, length and CRC out of byte stuffing. Reserve the two
+       CRC bytes before writing the body, then calculate CRC over wire bytes. */
+    stuffed_length = stuff(raw, payload_length + 2u, &out[7], out_capacity - 9u);
+    if (stuffed_length == 0u) return 0;
+    out[0] = 0xFFu; out[1] = 0xFFu; out[2] = 0xFDu; out[3] = 0u;
+    out[4] = id;
+    length = (uint16_t)(stuffed_length + 2u);
+    out[5] = (uint8_t)length; out[6] = (uint8_t)(length >> 8u);
+    wire_length = 7u + stuffed_length;
+    crc = imu_power_dxl_crc16(out, wire_length);
+    out[wire_length++] = (uint8_t)crc;
+    out[wire_length++] = (uint8_t)(crc >> 8u);
+    return wire_length;
 }
