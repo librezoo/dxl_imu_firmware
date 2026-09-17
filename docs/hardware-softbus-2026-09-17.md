@@ -191,3 +191,24 @@ max_consecutive_identical_imu_payloads=0
 从 279,382 增至 427,976，约 247.7 Hz，样本年龄结束时为 2 ms。结果文件：
 `artifacts/softbus-hw-20260917/soak-three-devices-result.json`，SHA-256：
 `5661e4ed53149ed54f6d2b8f2972bc6d187a755ad15f84fb9fc3ee3945de3935`。
+
+## 第三台舵机配置为 ID 3 / 1 Mbps
+
+接入第三台舵机后，多波特率扫描确认：
+
+```text
+新舵机: model=1200 firmware=53 id=1 baud=57,600 torque=0 hardware_error=0
+既有舵机: id=1/2 baud=1 Mbps firmware=52
+```
+
+在真实总线 57,600 下对新舵机执行写前检查，然后修改为 ID 3、波特率寄存器 3
+（1 Mbps）。写后以新配置读回：
+
+```text
+model=1200 firmware=53 id=3 baud_register=3 torque=0 hardware_error=0
+```
+
+最终 1 Mbps 扫描同时发现 ID 1、2、3。通过 FTDI D2XX 1 ms latency 发送
+`SYNC_READ(124,12,[200,1,2,3])`，固定 50 Hz 共 100 次，100/100 成功；平均
+延迟 3.75 ms、最大 4.95 ms，四个回复顺序、CRC 和错误码均正确。未使能扭矩或
+写入目标位置。
