@@ -11,11 +11,45 @@ The portable core implements the MicroDuck `imu_to_dxl v2` wire contract:
   `SYNC_WRITE`
 - IMU data at address 124, 12 bytes
 - two-slot CRC-protected configuration records
-- diagnostic/control table and a DEBUG UART maintenance command parser
+- diagnostic/control table and a DEBUG UART raw bus bridge; the legacy text
+  maintenance parser remains available as a build option
 
 The `platform/` adapter is intentionally separate from the portable core. It
 is the only layer that should include the WCH CH32V20x headers and provide SPI,
 UART, timer, flash, GPIO and reset hooks.
+
+## DEBUG UART raw bus bridge
+
+The default `0x0208` source configures USART1 on PA9/PA10 for fixed 1 Mbps,
+8N1 raw bytes. USART1 RX uses DMA1 channel 5 and the UART IDLE condition to
+commit one burst of at most 512 bytes. That burst is transmitted unchanged by
+USART3 using DMA1 channel 2 and the existing PA15 half-duplex direction signal.
+No DXL CRC or instruction validation is performed by the bridge.
+
+USART3's circular RX DMA supplies external bus traffic to both the local DXL
+parser and a 4096-byte USART1 TX queue drained by DMA1 channel 4. A DEBUG burst
+is also fed directly to the same local parser after its physical transmission,
+because the target board's RX path does not monitor local TX. This lets the
+internal IMU respond without relying on loopback. Its exact transmitted status
+bytes are queued to DEBUG explicitly. If another hardware revision does return
+the DEBUG request on RX, exact echo matching suppresses it from both the DEBUG
+mirror and duplicate local parsing. All other traffic is mirrored, including
+requests from another controller.
+
+There is deliberately no multi-controller arbitration, collision recovery,
+retry, or transaction scheduler. The DEBUG controller must wait for the bus
+transaction to finish before sending another burst. Byte order is preserved,
+but inter-packet timing is not a capture interface; use a logic analyzer when
+timing evidence is required.
+
+Define `IMU_POWER_DEBUG_CLI=1` to restore the previous USART1 115200 text CLI
+instead of the bridge. `build.ps1 -DebugCli` and the CMake option
+`-DIMU_POWER_DEBUG_CLI=ON` provide equivalent builds.
+
+The WCH-LinkE serial function supports at most 921600 baud. It can exercise a
+temporary 921600 test build, but validating the default 1 Mbps DEBUG line
+requires a USB-UART adapter that supports 1 Mbps. See the
+[hardware bridge validation](hardware-softbus-2026-09-17.md).
 
 ## Build
 
@@ -34,6 +68,8 @@ and Python are not required for this entry point:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+# Legacy 115200 text CLI instead of the default 1 Mbps raw bridge:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -DebugCli
 # Override the IDE installation directory when necessary:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -MounRiverRoot 'D:\Tools\MounRiver_Studio2'
 ```
@@ -70,6 +106,9 @@ cmake -S . -B build-ch32-cmake -G 'MinGW Makefiles' -DIMU_POWER_BUILD_CH32=ON `
 cmake --build build-ch32-cmake --target imu_power_ch32 --parallel 2
 ```
 
+Add `-DIMU_POWER_DEBUG_CLI=ON` to the configure command for the legacy CLI
+variant.
+
 ### Firmware layout and host tests
 
 Both MCU build entry points use `CH32V20x_D6`, `IMU_POWER_CH32`, C99,
@@ -90,9 +129,11 @@ by Git. Current validation results are recorded in [validation.md](validation.md
 Host tests additionally require CMake 3.16+ and a host C99 compiler; their
 commands are in the root README. They do not use the MCU toolchain.
 
-The portable test target exercises the CRC parser, status packet generation,
+The portable test targets exercise the CRC parser, status packet generation,
 the MicroDuck `SYNC_READ(124,12)` contract, binary16 validation, and the
-default configuration path. The hardware port samples the LSM6DSV16X gyro and
+default configuration path. Soft-bus tests cover exact echo suppression,
+mismatch recovery, raw byte forwarding, ring wraparound and queue overflow.
+The hardware port samples the LSM6DSV16X gyro and
 consumes tagged SFLP quaternion FIFO records; an absent or invalid SFLP record
 keeps the quaternion block at zero until the sensor is ready.
 

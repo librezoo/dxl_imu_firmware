@@ -143,7 +143,7 @@ void imu_power_device_init(imu_power_device_t *device,
     device->config_generation = generation;
     device->runtime_id = device->active_config.device_id;
     device->runtime_baudrate = device->active_config.baudrate;
-    device->diagnostics.firmware_version = 0x0207u;
+    device->diagnostics.firmware_version = 0x0208u;
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }
@@ -155,8 +155,8 @@ void imu_power_device_set_sample(imu_power_device_t *device,
     device->sample = *sample;
     device->diagnostics.sample_counter = sample->sample_counter;
     device->diagnostics.sample_age_us = sample->age_us;
-    if (sample->valid) device->diagnostics.status_flags |= 1u;
-    else device->diagnostics.status_flags &= (uint16_t)~1u;
+    if (sample->valid) device->diagnostics.status_flags |= IMU_POWER_STATUS_SAMPLE_VALID;
+    else device->diagnostics.status_flags &= (uint16_t)~IMU_POWER_STATUS_SAMPLE_VALID;
 }
 
 size_t imu_power_device_handle(imu_power_device_t *device,

@@ -19,14 +19,16 @@ static unsigned consume_to_head(uint16_t tail, uint16_t remaining)
 int main(void)
 {
     /* Twelve new bytes finish the ring; old bytes must not be replayed. */
-    assert(consume_to_head(500u, 0u) == 12u);
+    assert(consume_to_head(IMU_POWER_CH32_RX_SIZE - 12u, 0u) == 12u);
     /* Zero and the reloaded count describe the same write position. */
-    assert(consume_to_head(500u, 512u) == 12u);
+    assert(consume_to_head(IMU_POWER_CH32_RX_SIZE - 12u,
+                           IMU_POWER_CH32_RX_SIZE) == 12u);
     assert(consume_to_head(0u, 0u) == 0u);
-    assert(consume_to_head(0u, 512u) == 0u);
+    assert(consume_to_head(0u, IMU_POWER_CH32_RX_SIZE) == 0u);
     /* The next transfer crosses the wrap and stops at the new head. */
-    assert(consume_to_head(500u, 508u) == 16u);
-    assert(consume_to_head(4u, 508u) == 0u);
+    assert(consume_to_head(IMU_POWER_CH32_RX_SIZE - 12u,
+                           IMU_POWER_CH32_RX_SIZE - 4u) == 16u);
+    assert(consume_to_head(4u, IMU_POWER_CH32_RX_SIZE - 4u) == 0u);
     puts("imu_power_dma_ring_tests: PASS");
     return 0;
 }

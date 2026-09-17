@@ -20,6 +20,14 @@
 #define IMU_POWER_CONFIG_CMD_UNLOCK 0xA5u
 #define IMU_POWER_CONFIG_CMD_UNLOCK_CONFIRM 0x5Au
 
+#define IMU_POWER_STATUS_SAMPLE_VALID (1u << 0)
+#define IMU_POWER_STATUS_IMU_READY (1u << 1)
+#define IMU_POWER_STATUS_IMU_INIT_FAULT (1u << 2)
+#define IMU_POWER_STATUS_IMU_FIFO_FAULT (1u << 3)
+#define IMU_POWER_STATUS_SOFTBUS_RX_OVERFLOW (1u << 4)
+#define IMU_POWER_STATUS_SOFTBUS_TX_OVERFLOW (1u << 5)
+#define IMU_POWER_STATUS_SOFTBUS_ECHO_MISMATCH (1u << 6)
+
 typedef struct {
     uint16_t firmware_version;
     uint8_t protocol_version;

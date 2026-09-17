@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$MounRiverRoot = 'C:\MounRiver\MounRiver_Studio2',
-    [string]$BuildDirectory = 'build-ch32'
+    [string]$BuildDirectory = 'build-ch32',
+    [switch]$DebugCli
 )
 
 Set-StrictMode -Version Latest
@@ -76,13 +77,17 @@ $sources = @(
     'src/device.c',
     'src/dxl.c',
     'src/imu_wire.c',
-    'src/maintenance.c'
+    'src/maintenance.c',
+    'src/softbus.c'
 )
 $compileFlags = @(
     '-Os', '-march=rv32imac', '-mabi=ilp32', '-msmall-data-limit=8',
     '-mno-save-restore', '-ffunction-sections', '-fdata-sections',
     '-DIMU_POWER_CH32', '-DCH32V20x_D6', '-MMD', '-MP'
 )
+if ($DebugCli) {
+    $compileFlags += '-DIMU_POWER_DEBUG_CLI=1'
+}
 foreach ($include in @('include', 'platform', "$sdk/Core", "$sdk/Debug", "$sdk/Peripheral/inc", $system)) {
     $compileFlags += '-I' + (Join-Path $repoRoot $include)
 }

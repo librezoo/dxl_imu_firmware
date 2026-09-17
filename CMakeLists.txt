@@ -10,6 +10,7 @@ add_library(imu_power_core
     src/dxl.c
     src/imu_wire.c
     src/maintenance.c
+    src/softbus.c
 )
 target_include_directories(imu_power_core PUBLIC include)
 
@@ -34,8 +35,13 @@ add_executable(imu_power_imu_sample_tests tests/test_imu_sample.c)
 target_link_libraries(imu_power_imu_sample_tests PRIVATE imu_power_core)
 add_test(NAME imu_power_imu_sample_tests COMMAND imu_power_imu_sample_tests)
 
+add_executable(imu_power_softbus_tests tests/test_softbus.c)
+target_link_libraries(imu_power_softbus_tests PRIVATE imu_power_core)
+add_test(NAME imu_power_softbus_tests COMMAND imu_power_softbus_tests)
+
 # The MCU SDK is committed with the firmware; no external SDK is required.
 option(IMU_POWER_BUILD_CH32 "Build CH32V203C8U6 firmware" OFF)
+option(IMU_POWER_DEBUG_CLI "Use the legacy 115200 DEBUG UART text CLI" OFF)
 if(IMU_POWER_BUILD_CH32)
     enable_language(ASM)
     set(IMU_POWER_WCH_EVT "${CMAKE_CURRENT_SOURCE_DIR}/vendor/wch-ch32v20x/EVT")
@@ -71,9 +77,12 @@ if(IMU_POWER_BUILD_CH32)
         platform/ch32_main.c
         platform/ch32v203_port.c
         ${WCH_SRC}/Startup/startup_ch32v20x_D6.S
-        src/config.c src/device.c src/dxl.c src/imu_wire.c src/maintenance.c
+        src/config.c src/device.c src/dxl.c src/imu_wire.c src/maintenance.c src/softbus.c
     )
     target_compile_definitions(imu_power_ch32 PRIVATE IMU_POWER_CH32 CH32V20x_D6)
+    if(IMU_POWER_DEBUG_CLI)
+        target_compile_definitions(imu_power_ch32 PRIVATE IMU_POWER_DEBUG_CLI=1)
+    endif()
     target_include_directories(imu_power_ch32 PRIVATE
         include platform ${WCH_SRC}/Core ${WCH_SRC}/Debug
         ${WCH_PERIPH}/inc ${WCH_SYSTEM_DIR})
