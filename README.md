@@ -4,19 +4,20 @@
 
 ## 下载已验证固件
 
-[firmware-20260916（诊断版本 0x0206）](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260916)
-修复总线收发、IMU 量程及采样新鲜度，并使用芯片内置零偏估计修正角速度。
-在当前 CH32V203C8U6 + LSM6DSV16X 复刻板上完成了静态采样与合并读取验证。
+[firmware-20260917（诊断版本 0x0207）](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260917)
+将 IMU 内部加速度、陀螺及 SFLP 融合的名义更新率提高到 240 Hz，保留已有的
+总线收发修复、±500 dps 量程及芯片内置零偏修正。主控读取与 policy 仍保持 50 Hz。
+在当前 CH32V203C8U6 + LSM6DSV16X 复刻板上完成了静态采样与持续合并读取验证。
 
-- MounRiver Studio / WCH-LinkUtility：下载 `microduck-imu-power-fw-20260916.hex`。
-- `wlink`：下载 `microduck-imu-power-fw-20260916.bin`，烧录基址为 `0x08000000`。
+- MounRiver Studio / WCH-LinkUtility：下载 `microduck-imu-power-fw-20260917.hex`。
+- `wlink`：下载 `microduck-imu-power-fw-20260917.bin`，烧录基址为 `0x08000000`。
 - `.elf`、`.map` 用于调试；`build-info.json`、`SHA256SUMS.txt` 沿用原发布的构建记录和校验文件。
 
 ```sh
-wlink flash --address 0x08000000 ./microduck-imu-power-fw-20260916.bin
+wlink flash --address 0x08000000 ./microduck-imu-power-fw-20260917.bin
 ```
 
-烧录前确认目标板并备份现有 Flash/配置。[发布说明](docs/releases/firmware-20260916.md)
+烧录前确认目标板并备份现有 Flash/配置。[发布说明](docs/releases/firmware-20260917.md)
 记录具体修复、下载文件和验证范围；未进行机器人运动验收。
 
 ## 目录
