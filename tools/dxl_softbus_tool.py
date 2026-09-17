@@ -596,7 +596,11 @@ def command_self_test(_: argparse.Namespace) -> int:
 
 
 def add_common_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--port", default="COM3", help="DEBUG UART port")
+    parser.add_argument(
+        "--port",
+        required=True,
+        help="DEBUG UART port, for example COM5 or /dev/ttyUSB0",
+    )
     parser.add_argument("--debug-baud", type=parse_int, default=1_000_000)
     parser.add_argument("--internal-id", type=parse_int, default=INTERNAL_ID_DEFAULT)
     parser.add_argument("--timeout", type=float, default=0.08)

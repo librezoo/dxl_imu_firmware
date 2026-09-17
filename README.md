@@ -126,11 +126,13 @@ XL330-M288。
 
 - [ROBOTIS 官方下载与使用说明](https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_wizard2/#software-download)
 
-使用前关闭 Python 测试器和其它占用 COM3 的程序，然后在 Wizard 中配置：
+先在 Windows 设备管理器的“端口（COM 和 LPT）”中确认连接 PA9/PA10 的
+DEBUG USB-UART 实际端口号。使用前关闭 Python 测试器和其它占用该端口的程序，
+然后在 Wizard 中配置：
 
 ```text
 Tools -> Options -> Scan
-Port:       COM3
+Port:       实际 DEBUG USB-UART 端口（例如 COM5）
 Baudrate:   1,000,000
 Protocol:   2.0
 ID range:   1-3
@@ -164,23 +166,29 @@ Torque Enable(64)         = 1
 python -m pip install pyserial
 ```
 
+以下 PowerShell 示例先保存实际端口；请把 `COMx` 替换为设备管理器显示的端口号：
+
+```powershell
+$debugPort = 'COMx'
+```
+
 全波特率、全 ID 扫描：
 
 ```powershell
-python tools\dxl_softbus_tool.py scan --port COM3
+python tools\dxl_softbus_tool.py scan --port $debugPort
 ```
 
 限定扫描范围：
 
 ```powershell
-python tools\dxl_softbus_tool.py scan --port COM3 `
+python tools\dxl_softbus_tool.py scan --port $debugPort `
   --bauds 57600 1000000 --ids 1-20,30
 ```
 
 修改命令默认只输出计划，不写 EEPROM：
 
 ```powershell
-python tools\dxl_softbus_tool.py configure --port COM3 `
+python tools\dxl_softbus_tool.py configure --port $debugPort `
   --current-id 1 --current-baud 57600 `
   --new-id 2 --new-baud 1000000
 ```
@@ -188,12 +196,12 @@ python tools\dxl_softbus_tool.py configure --port COM3 `
 确认后显式添加 `--apply`：
 
 ```powershell
-python tools\dxl_softbus_tool.py configure --port COM3 `
+python tools\dxl_softbus_tool.py configure --port $debugPort `
   --current-id 1 --current-baud 57600 `
   --new-id 2 --new-baud 1000000 --apply
 
 # 只改波特率，ID 保持不变
-python tools\dxl_softbus_tool.py configure --port COM3 `
+python tools\dxl_softbus_tool.py configure --port $debugPort `
   --current-id 1 --current-baud 57600 `
   --new-baud 1000000 --apply
 ```
