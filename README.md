@@ -118,6 +118,43 @@ baud           = 1,000,000, 8N1
 WCH-LinkE 自带串口最高只支持 921600，不能用于正式 1 Mbps 验收。实机测试使用
 支持 1 Mbps 的 FTDI；50 Hz 长稳测试通过 D2XX 会话级 1 ms latency 完成。
 
+## DYNAMIXEL Wizard 2.0 图形上位机
+
+舵机配置、单机动作测试、实时曲线和手工数据包调试，推荐使用 ROBOTIS 官方
+DYNAMIXEL Wizard 2.0。它支持 Windows 10/11 64 位、Dynamixel Protocol 2.0 和
+XL330-M288。
+
+- [ROBOTIS 官方下载与使用说明](https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_wizard2/#software-download)
+
+使用前关闭 Python 测试器和其它占用 COM3 的程序，然后在 Wizard 中配置：
+
+```text
+Tools -> Options -> Scan
+Port:       COM3
+Baudrate:   1,000,000
+Protocol:   2.0
+ID range:   1-3
+```
+
+执行 `Device -> Scan` 后，当前测试总线应发现三台 XL330-M288：ID 1、2、3。
+选择设备即可读取和修改控制表。手动运动测试建议依次设置：
+
+```text
+Torque Enable(64)       = 0
+Profile Acceleration(108) = 20
+Profile Velocity(112)     = 80
+Goal Position(116)        = 当前 Present Position(132)
+Torque Enable(64)         = 1
+```
+
+随后只小幅修改 Goal Position，并在结束或异常时将 Torque Enable 恢复为 0。测试前
+应让机构悬空、确认运动范围无遮挡并准备断开舵机电源。
+
+内部 IMU ID 200 是自定义设备，Wizard 可能不会把它识别为标准舵机。可在
+`View -> Packet` 中手动发送 `READ(124,12)`，或使用下节 Python 工具访问。不要
+通过 Wizard 对内部 IMU执行舵机 Firmware Update 或 Factory Reset。Wizard 适合
+配置和低频调试，不替代机器人实时 50 Hz 控制程序。
+
 ## 舵机扫描与配置工具
 
 [`tools/dxl_softbus_tool.py`](tools/dxl_softbus_tool.py) 将多波特率扫描、内部 IMU
