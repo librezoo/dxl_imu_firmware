@@ -8,14 +8,14 @@ DEBUG UART 到真实半双工总线的原始字节桥。
 
 | 项目 | 当前值 |
 |---|---|
-| 当前源码诊断版本 | `0x0209`：DEBUG RX 空闲上拉修复，尚未发布 release |
-| 最新已发布版本 | [`firmware-20260917-0x0208`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260917-0x0208) |
-| 上一发布版本 | [`firmware-20260917`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260917)，诊断版本 `0x0207` |
+| 当前源码诊断版本 | `0x0209`：DEBUG RX 空闲上拉修复 |
+| 最新已发布版本 | [`firmware-20260918-0x0209`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260918-0x0209) |
+| 上一发布版本 | [`firmware-20260917-0x0208`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260917-0x0208) |
 | MCU / 晶振 | CH32V203C8U6 / 8 MHz |
 | 内部 IMU | LSM6DSV16X，名义 240 Hz |
 | DXL 默认配置 | Protocol 2.0，ID 200，1 Mbps |
 | DEBUG 软总线 | PA9/PA10，固定 1 Mbps，8N1 |
-| 最新已发布 BIN | 14,324 字节，SHA-256 `b4f4f92a…586b0aa` |
+| 最新已发布 BIN | 14,328 字节，SHA-256 `9d4cef56…c3956a7` |
 | 宿主机测试 | 6/6 通过 |
 | 0x0208 实机记录 | IMU 200 + 舵机 1/2，50 Hz，10 分钟，30,000/30,000 通过；舵机 3 四设备冒烟 100/100 通过 |
 | 0x0209 修复验证 | IMU + 15 舵机，50 Hz，30,001/30,001；单 IMU 200 Hz 与混合读取各 12,000/12,000，均零错误 |

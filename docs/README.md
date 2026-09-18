@@ -21,11 +21,13 @@
 
 ## 发布记录
 
+- [firmware-20260918-0x0209 / DEBUG RX 空闲上拉修复](releases/firmware-20260918-0x0209.md)
+- [0x0209 请求回流修复验证](debug-rx-idle-fix-2026-09-18.md)
 - [firmware-20260917-0x0208 / DEBUG 软总线](releases/firmware-20260917-0x0208.md)
 - [firmware-20260917 / 0x0207](releases/firmware-20260917.md)
 - [firmware-20260916 / 0x0206](releases/firmware-20260916.md)
 
-当前版本为 `firmware-20260917-0x0208`；不要把 0x0207 发布说明当作当前源码状态。
+当前版本为 `firmware-20260918-0x0209`；旧版本说明保留各自的历史验证范围。
 
 ## 历史背景
 
