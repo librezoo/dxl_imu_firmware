@@ -297,7 +297,9 @@ static void gpio_uart_spi_init(uint32_t baudrate)
     gpio.GPIO_Pin = GPIO_Pin_11; gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING; GPIO_Init(GPIOB, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_15; gpio.GPIO_Mode = GPIO_Mode_Out_PP; GPIO_Init(GPIOA, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_9; gpio.GPIO_Mode = GPIO_Mode_AF_PP; GPIO_Init(GPIOA, &gpio);
-    gpio.GPIO_Pin = GPIO_Pin_10; gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING; GPIO_Init(GPIOA, &gpio);
+    /* UART idle is high. Keep an undriven DEBUG RX from collecting noise that
+       the transparent bridge would inject onto the motor bus. */
+    gpio.GPIO_Pin = GPIO_Pin_10; gpio.GPIO_Mode = GPIO_Mode_IPU; GPIO_Init(GPIOA, &gpio);
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource14);
     {
         EXTI_InitTypeDef exti = {0};
