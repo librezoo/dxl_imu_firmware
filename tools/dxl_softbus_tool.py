@@ -11,14 +11,17 @@ Requires pyserial for hardware commands.  The self-test has no dependencies.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import math
+import os
 import struct
 import sys
 import time
 from dataclasses import asdict, dataclass
+from enum import IntEnum
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, TextIO
 
 try:
     import serial  # type: ignore
@@ -65,6 +68,161 @@ SERVO_BAUD_REGISTER = {
 
 class ToolError(RuntimeError):
     pass
+
+
+class Severity(IntEnum):
+    PASS = 0
+    WARN = 1
+    FAIL = 2
+
+
+@dataclass(frozen=True)
+class Finding:
+    severity: Severity
+    code: str
+    message: str
+    device_id: int | None = None
+
+    def to_json(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "severity": self.severity.name,
+            "code": self.code,
+            "message": self.message,
+        }
+        if self.device_id is not None:
+            result["device_id"] = self.device_id
+        return result
+
+
+@dataclass
+class CommandResult:
+    command: str
+    findings: list[Finding]
+    external_count: int = 0
+    mode: str | None = None
+
+    @property
+    def severity(self) -> Severity:
+        return max(
+            (finding.severity for finding in self.findings),
+            default=Severity.PASS,
+        )
+
+    def count(self, severity: Severity) -> int:
+        return sum(finding.severity == severity for finding in self.findings)
+
+    def summary(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "command": self.command,
+            "status": self.severity.name,
+            "exit_code": int(self.severity),
+            "pass": self.count(Severity.PASS),
+            "warn": self.count(Severity.WARN),
+            "fail": self.count(Severity.FAIL),
+            "external": self.external_count,
+        }
+        if self.mode is not None:
+            result["mode"] = self.mode
+        return result
+
+
+class Reporter:
+    _COLORS = {
+        Severity.PASS: "\x1b[1;32m",
+        Severity.WARN: "\x1b[1;33m",
+        Severity.FAIL: "\x1b[1;31m",
+    }
+    _INFO_COLOR = "\x1b[1;36m"
+    _RESET = "\x1b[0m"
+
+    def __init__(
+        self,
+        command: str,
+        color_mode: str,
+        stream: TextIO = sys.stdout,
+        environment: dict[str, str] | None = None,
+    ) -> None:
+        self.command = command
+        self.stream = stream
+        env = os.environ if environment is None else environment
+        if color_mode == "always":
+            self.color = True
+        elif color_mode == "never":
+            self.color = False
+        else:
+            self.color = bool(stream.isatty()) and "NO_COLOR" not in env
+
+    def _paint(self, text: str, color: str) -> str:
+        return f"{color}{text}{self._RESET}" if self.color else text
+
+    def section(self, title: str) -> None:
+        line = f"-------------------- {title} --------------------"
+        print(self._paint(line, self._INFO_COLOR), file=self.stream, flush=True)
+
+    def info(self, code: str, message: str) -> None:
+        label = self._paint("[INFO]", self._INFO_COLOR)
+        print(f"{label} {code}: {message}", file=self.stream, flush=True)
+
+    def finding(self, finding: Finding) -> None:
+        label = self._paint(
+            f"[{finding.severity.name}]", self._COLORS[finding.severity]
+        )
+        device = (
+            f" device_id={finding.device_id}" if finding.device_id is not None else ""
+        )
+        print(
+            f"{label} {finding.code}:{device} {finding.message}",
+            file=self.stream,
+            flush=True,
+        )
+
+    def finalize(self, result: CommandResult) -> int:
+        severity = result.severity
+        banner = f"==================== FINAL RESULT: {severity.name} ===================="
+        print(
+            self._paint(banner, self._COLORS[severity]),
+            file=self.stream,
+            flush=True,
+        )
+        summary = result.summary()
+        parts = [
+            f"RESULT command={summary['command']}",
+            f"status={summary['status']}",
+            f"pass={summary['pass']}",
+            f"warn={summary['warn']}",
+            f"fail={summary['fail']}",
+            f"external={summary['external']}",
+        ]
+        if result.mode is not None:
+            parts.append(f"mode={result.mode}")
+        # This final line is deliberately never colored for scripts and logs.
+        print(" ".join(parts), file=self.stream, flush=True)
+        return int(severity)
+
+
+def add_finding(
+    args: argparse.Namespace,
+    severity: Severity,
+    code: str,
+    message: str,
+    device_id: int | None = None,
+) -> Finding:
+    finding = Finding(severity, code, message, device_id)
+    args.command_result.findings.append(finding)
+    args.reporter.finding(finding)
+    return finding
+
+
+def no_external_severity(allow_no_external: bool) -> Severity:
+    return Severity.WARN if allow_no_external else Severity.FAIL
+
+
+def external_device_severity(status_error: int) -> Severity:
+    return Severity.WARN if status_error & DXL_ALERT_BIT else Severity.PASS
+
+
+def xl330_voltage_severity(voltage: float) -> Severity:
+    return Severity.PASS if 3.7 <= voltage <= 6.0 else Severity.FAIL
 
 
 def crc16(data: bytes) -> int:
@@ -688,16 +846,22 @@ def configure_servo(
     return before, after
 
 
-def command_scan(args: argparse.Namespace) -> int:
+def command_scan(args: argparse.Namespace) -> None:
     bauds = args.bauds or list(BOARD_BAUDS)
     original_baud: int | None = None
     found: list[FoundDevice] = []
+    args.reporter.section("BUS SCAN")
     with SoftBus(args.port, args.debug_baud, args.timeout) as bus:
         original_baud = read_board_diagnostics(bus, args.internal_id).baud
         try:
             for baud in bauds:
                 set_board_bus_baud(bus, args.internal_id, baud)
-                print(f"BUS_BAUD={baud} VERIFIED", flush=True)
+                add_finding(
+                    args,
+                    Severity.PASS,
+                    "BUS_BAUD_VERIFIED",
+                    f"real bus is operating at {baud} bps",
+                )
                 devices = scan_at_baud(
                     bus,
                     baud,
@@ -709,36 +873,55 @@ def command_scan(args: argparse.Namespace) -> int:
                 found.extend(devices)
                 if devices:
                     for device in devices:
-                        print(
-                            f"FOUND baud={device.baud} id={device.device_id} "
-                            f"model={device.model} firmware={device.firmware} "
+                        severity = external_device_severity(device.status_error)
+                        add_finding(
+                            args,
+                            severity,
+                            "DEVICE_ALERT" if severity == Severity.WARN else "DEVICE_FOUND",
+                            f"baud={device.baud} model={device.model} "
+                            f"firmware={device.firmware} "
                             f"status_error=0x{device.status_error:02x} "
                             f"alert={bool(device.status_error & DXL_ALERT_BIT)}",
-                            flush=True,
+                            device.device_id,
                         )
                 else:
-                    print(f"BUS_BAUD={baud} NO_EXTERNAL_RESPONDERS", flush=True)
+                    args.reporter.info(
+                        "NO_RESPONDERS_AT_BAUD",
+                        f"no external devices responded at {baud} bps",
+                    )
         finally:
             if original_baud is not None:
                 set_board_bus_baud(bus, args.internal_id, original_baud)
-                print(f"FINAL_BUS_BAUD={original_baud} RESTORED", flush=True)
+                add_finding(
+                    args,
+                    Severity.PASS,
+                    "BUS_BAUD_RESTORED",
+                    f"real bus restored to {original_baud} bps",
+                )
+    args.command_result.external_count = len(found)
+    if not found:
+        add_finding(
+            args,
+            no_external_severity(args.allow_no_external),
+            "NO_EXTERNAL_DEVICES",
+            "no external devices responded in the requested scan range",
+        )
     if args.json_out:
         Path(args.json_out).write_text(
             json.dumps([asdict(item) for item in found], indent=2),
             encoding="utf-8",
         )
-    print(f"TOTAL_EXTERNAL_RESPONDERS={len(found)}")
-    return 0
+    args.reporter.info("TOTAL_EXTERNAL_RESPONDERS", str(len(found)))
 
 
-def command_check(args: argparse.Namespace) -> int:
+def command_check(args: argparse.Namespace) -> None:
     report: dict[str, object] = {
         "port": args.port,
         "softbus_baud": args.debug_baud,
     }
-    warnings: list[str] = []
     external: list[dict[str, object]] = []
     original_baud: int | None = None
+    args.reporter.section("INTERNAL IMU")
     with SoftBus(args.port, args.debug_baud, args.timeout) as bus:
         original = read_board_diagnostics(bus, args.internal_id)
         original_baud = original.baud
@@ -750,66 +933,137 @@ def command_check(args: argparse.Namespace) -> int:
         registers = imu["imu_init_registers"]
         assert isinstance(before, dict) and isinstance(after, dict)
         assert isinstance(summary, dict) and isinstance(registers, dict)
-        print(
+        args.reporter.info(
+            "IMU_DIAGNOSTICS",
             f"IMU id={args.internal_id} firmware=0x{int(before['firmware']):04x} "
             f"baud={before['baud']} status=0x{int(after['status_flags']):04x} "
             f"flags={firmware_status_names(int(after['status_flags']))} "
-            f"last_error={after['last_error']}"
+            f"last_error={after['last_error']}",
         )
-        print(
+        args.reporter.info(
+            "IMU_SAMPLES",
             f"IMU_SAMPLES count={summary['samples_requested']} "
             f"unique={summary['unique_wire_samples']} "
             f"quaternion_valid={summary['valid_quaternion_samples']} "
             f"rate_hz={float(summary['observed_sample_rate_hz']):.1f} "
-            f"max_age_us={summary['max_sample_age_us']}"
+            f"max_age_us={summary['max_sample_age_us']}",
         )
-        print(
-            "IMU_GYRO_DPS mean="
+        args.reporter.info(
+            "IMU_GYRO_DPS",
+            "mean="
             + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_mean"])
             + " min="
             + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_min"])
             + " max="
-            + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_max"])
+            + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_max"]),
         )
         if args.show_samples:
             for sample in imu["samples"]:
                 assert isinstance(sample, dict)
-                print(
-                    f"IMU_SAMPLE index={sample['index']} "
+                args.reporter.info(
+                    "IMU_SAMPLE",
+                    f"index={sample['index']} "
                     f"gyro_dps={sample['gyro_dps']} "
                     f"quat_xyz={sample['quaternion_xyz']} "
-                    f"quat_w={sample['quaternion_w_positive']}"
+                    f"quat_w={sample['quaternion_w_positive']}",
                 )
 
         if (int(after["status_flags"]) & 0x03) != 0x03:
-            warnings.append(f"IMU not ready/valid: status=0x{int(after['status_flags']):04x}")
-        if int(after["status_flags"]) & 0x7C:
-            warnings.append(
-                f"firmware diagnostic warning: status=0x{int(after['status_flags']):04x} "
-                f"{firmware_status_names(int(after['status_flags']))}"
+            add_finding(
+                args,
+                Severity.FAIL,
+                "IMU_NOT_READY",
+                f"IMU is not ready/valid: status=0x{int(after['status_flags']):04x}",
+            )
+        else:
+            add_finding(
+                args,
+                Severity.PASS,
+                "IMU_READY",
+                "IMU is initialized and producing valid samples",
+            )
+        imu_faults = int(after["status_flags"]) & 0x0C
+        transport_warnings = int(after["status_flags"]) & 0x70
+        if imu_faults:
+            add_finding(
+                args,
+                Severity.FAIL,
+                "IMU_FAULT_FLAGS",
+                f"status=0x{int(after['status_flags']):04x} "
+                f"flags={firmware_status_names(int(after['status_flags']))}",
+            )
+        if transport_warnings:
+            add_finding(
+                args,
+                Severity.WARN,
+                "SOFTBUS_STICKY_FLAGS",
+                f"status=0x{int(after['status_flags']):04x} "
+                f"flags={firmware_status_names(int(after['status_flags']))}",
             )
         if int(after["last_error"]) != 0:
-            warnings.append(f"firmware last_error={after['last_error']}")
+            add_finding(
+                args,
+                Severity.FAIL,
+                "FIRMWARE_LAST_ERROR",
+                f"last_error={after['last_error']}",
+            )
+        else:
+            add_finding(
+                args,
+                Severity.PASS,
+                "FIRMWARE_LAST_ERROR_CLEAR",
+                "firmware last_error is zero",
+            )
         if int(summary["valid_quaternion_samples"]) != args.samples:
-            warnings.append("one or more IMU quaternion samples were invalid")
+            add_finding(
+                args,
+                Severity.FAIL,
+                "IMU_QUATERNION_INVALID",
+                f"valid={summary['valid_quaternion_samples']} requested={args.samples}",
+            )
+        else:
+            add_finding(
+                args,
+                Severity.PASS,
+                "IMU_QUATERNION_VALID",
+                f"all {args.samples} quaternion samples are valid",
+            )
         expected_registers = {
             "who_am_i": 0x70,
             "ctrl1_xl": 0x07,
             "ctrl2_g": 0x07,
             "sflp_odr": 0x63,
         }
+        register_mismatches = 0
         for name, expected in expected_registers.items():
             if int(registers[name]) != expected:
-                warnings.append(
+                register_mismatches += 1
+                add_finding(
+                    args,
+                    Severity.FAIL,
+                    "IMU_REGISTER_MISMATCH",
                     f"IMU register {name}=0x{int(registers[name]):02x}, "
-                    f"expected 0x{expected:02x}"
+                    f"expected 0x{expected:02x}",
                 )
+        if register_mismatches == 0:
+            add_finding(
+                args,
+                Severity.PASS,
+                "IMU_REGISTERS_VALID",
+                "WHO_AM_I and required configuration registers match",
+            )
 
+        args.reporter.section("REAL BUS SCAN")
         bauds = args.bauds or [original_baud]
         try:
             for baud in bauds:
                 set_board_bus_baud(bus, args.internal_id, baud)
-                print(f"BUS_BAUD={baud} VERIFIED", flush=True)
+                add_finding(
+                    args,
+                    Severity.PASS,
+                    "BUS_BAUD_VERIFIED",
+                    f"real bus is operating at {baud} bps",
+                )
                 devices = scan_at_baud(
                     bus,
                     baud,
@@ -819,74 +1073,137 @@ def command_check(args: argparse.Namespace) -> int:
                     args.scan_timeout,
                 )
                 if not devices:
-                    print(f"BUS_BAUD={baud} NO_EXTERNAL_RESPONDERS", flush=True)
+                    args.reporter.info(
+                        "NO_RESPONDERS_AT_BAUD",
+                        f"no external devices responded at {baud} bps",
+                    )
                 for device in devices:
                     detail = inspect_external_device(bus, device)
                     external.append(detail)
-                    print(
-                        f"DEVICE baud={baud} id={device.device_id} "
-                        f"model={device.model} firmware={device.firmware} "
-                        f"alert={detail['alert']}"
+                    args.reporter.section(f"EXTERNAL DEVICE ID {device.device_id}")
+                    device_severity = external_device_severity(device.status_error)
+                    add_finding(
+                        args,
+                        device_severity,
+                        "DEVICE_ALERT" if device_severity == Severity.WARN else "DEVICE_FOUND",
+                        f"baud={baud} model={device.model} "
+                        f"firmware={device.firmware} alert={detail['alert']}",
+                        device.device_id,
                     )
                     if detail.get("type") == "XL330":
-                        print(
-                            f"XL330 id={device.device_id} "
+                        args.reporter.info(
+                            "XL330_STATE",
+                            f"id={device.device_id} "
                             f"voltage_v={float(detail['present_input_voltage_v']):.1f} "
                             f"temperature_c={detail['present_temperature_c']} "
                             f"torque={detail['torque_enable']} "
                             f"hardware_error=0x{int(detail['hardware_error']):02x} "
-                            f"errors={detail['hardware_error_names']}"
+                            f"errors={detail['hardware_error_names']}",
                         )
                         if int(detail["hardware_error"]) != 0:
-                            warnings.append(
-                                f"device {device.device_id} hardware_error="
+                            add_finding(
+                                args,
+                                Severity.FAIL,
+                                "XL330_HARDWARE_ERROR",
+                                f"hardware_error="
                                 f"0x{int(detail['hardware_error']):02x} "
-                                f"{detail['hardware_error_names']}"
+                                f"{detail['hardware_error_names']}",
+                                device.device_id,
+                            )
+                        else:
+                            add_finding(
+                                args,
+                                Severity.PASS,
+                                "XL330_HARDWARE_OK",
+                                "hardware_error is zero",
+                                device.device_id,
                             )
                         voltage = float(detail["present_input_voltage_v"])
-                        if voltage < 3.7 or voltage > 6.0:
-                            warnings.append(
-                                f"device {device.device_id} XL330 voltage {voltage:.1f} V "
-                                "is outside 3.7..6.0 V"
+                        voltage_severity = xl330_voltage_severity(voltage)
+                        add_finding(
+                            args,
+                            voltage_severity,
+                            "XL330_VOLTAGE_OK"
+                            if voltage_severity == Severity.PASS
+                            else "XL330_VOLTAGE_OUT_OF_RANGE",
+                            f"input voltage is {voltage:.1f} V; allowed range is 3.7..6.0 V",
+                            device.device_id,
+                        )
+                        if not (int(detail["shutdown"]) & 0x01):
+                            add_finding(
+                                args,
+                                Severity.FAIL,
+                                "XL330_VOLTAGE_SHUTDOWN_DISABLED",
+                                f"input-voltage shutdown protection is disabled: "
+                                f"Shutdown=0x{int(detail['shutdown']):02x}",
+                                device.device_id,
                             )
-                        if (
-                            int(detail["hardware_error"]) & 0x01
-                            and not (int(detail["shutdown"]) & 0x01)
-                        ):
-                            warnings.append(
-                                f"device {device.device_id} input-voltage shutdown "
-                                f"protection is disabled: Shutdown=0x{int(detail['shutdown']):02x}"
+                        else:
+                            add_finding(
+                                args,
+                                Severity.PASS,
+                                "XL330_VOLTAGE_SHUTDOWN_ENABLED",
+                                f"input-voltage shutdown protection is enabled: "
+                                f"Shutdown=0x{int(detail['shutdown']):02x}",
+                                device.device_id,
                             )
                         if int(detail["torque_enable"]) and not 3.7 <= voltage <= 6.0:
-                            warnings.append(
-                                f"device {device.device_id} torque is enabled while "
-                                f"voltage is {voltage:.1f} V"
+                            add_finding(
+                                args,
+                                Severity.FAIL,
+                                "XL330_TORQUE_AT_INVALID_VOLTAGE",
+                                f"torque is enabled while voltage is {voltage:.1f} V",
+                                device.device_id,
                             )
+                    else:
+                        add_finding(
+                            args,
+                            Severity.WARN,
+                            "UNSUPPORTED_CONTROL_TABLE",
+                            "device responded, but detailed control-table inspection "
+                            "is only implemented for XL330 model 1200",
+                            device.device_id,
+                        )
         finally:
             if original_baud is not None:
                 set_board_bus_baud(bus, args.internal_id, original_baud)
-                print(f"FINAL_BUS_BAUD={original_baud} RESTORED", flush=True)
+                add_finding(
+                    args,
+                    Severity.PASS,
+                    "BUS_BAUD_RESTORED",
+                    f"real bus restored to {original_baud} bps",
+                )
+        args.command_result.external_count = len(external)
+        if not external:
+            add_finding(
+                args,
+                no_external_severity(args.allow_no_external),
+                "NO_EXTERNAL_DEVICES",
+                "no external devices responded in the requested scan range",
+            )
         report["final_board_diagnostics"] = asdict(
             read_board_diagnostics(bus, args.internal_id)
         )
     report["external_devices"] = external
-    report["warnings"] = warnings
+    report["warnings"] = [
+        finding.message
+        for finding in args.command_result.findings
+        if finding.severity != Severity.PASS
+    ]
+    report["findings"] = [
+        finding.to_json() for finding in args.command_result.findings
+    ]
+    report["result"] = args.command_result.summary()
     if args.json_out:
         Path(args.json_out).write_text(
             json.dumps(report, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-    print(f"TOTAL_EXTERNAL_RESPONDERS={len(external)}")
-    if warnings:
-        for warning in warnings:
-            print(f"WARNING: {warning}")
-        print(f"CHECK_WARNINGS={len(warnings)}")
-    else:
-        print("CHECK_OK")
-    return 0
+    args.reporter.info("TOTAL_EXTERNAL_RESPONDERS", str(len(external)))
 
 
-def command_configure(args: argparse.Namespace) -> int:
+def command_configure(args: argparse.Namespace) -> None:
+    args.reporter.section("SERVO CONFIGURATION")
     if args.new_id is None and args.new_baud is None:
         raise ToolError("configure requires --new-id and/or --new-baud")
     plan = {
@@ -899,9 +1216,16 @@ def command_configure(args: argparse.Namespace) -> int:
         "expected_model": args.expected_model,
     }
     if not args.apply:
+        args.command_result.mode = "DRY_RUN"
         print(json.dumps({"dry_run": True, "plan": plan}, indent=2))
-        print("Re-run with --apply to write the servo EEPROM.")
-        return 0
+        add_finding(
+            args,
+            Severity.PASS,
+            "CONFIGURATION_DRY_RUN",
+            "plan validated; no EEPROM writes performed; re-run with --apply",
+            args.current_id,
+        )
+        return
 
     original_board_baud: int | None = None
     success = False
@@ -918,9 +1242,15 @@ def command_configure(args: argparse.Namespace) -> int:
                 expected_model=args.expected_model,
             )
             success = True
-            print("BEFORE " + json.dumps(before, sort_keys=True))
-            print("AFTER  " + json.dumps(after, sort_keys=True))
-            print("CONFIGURATION_OK")
+            args.reporter.info("BEFORE", json.dumps(before, sort_keys=True))
+            args.reporter.info("AFTER", json.dumps(after, sort_keys=True))
+            add_finding(
+                args,
+                Severity.PASS,
+                "CONFIGURATION_APPLIED",
+                "servo ID/baud configuration was written and verified",
+                int(plan["new_id"]),
+            )
         finally:
             if original_board_baud is not None:
                 final_baud = (
@@ -929,11 +1259,16 @@ def command_configure(args: argparse.Namespace) -> int:
                     else original_board_baud
                 )
                 set_board_bus_baud(bus, args.internal_id, int(final_baud))
-                print(f"FINAL_BUS_BAUD={final_baud} VERIFIED")
-    return 0
+                add_finding(
+                    args,
+                    Severity.PASS,
+                    "BUS_BAUD_FINALIZED",
+                    f"real bus finalized at {final_baud} bps",
+                )
 
 
-def command_self_test(_: argparse.Namespace) -> int:
+def command_self_test(args: argparse.Namespace) -> None:
+    args.reporter.section("SELF TEST")
     ping = bytes.fromhex("ff ff fd 00 01 03 00 01 19 4e")
     assert crc16(ping[:-2]) == 0x4E19
     assert build_packet(1, PING) == ping
@@ -953,8 +1288,65 @@ def command_self_test(_: argparse.Namespace) -> int:
         "electrical_shock_or_power",
         "overload",
     ]
-    print("SELF_TEST_OK")
-    return 0
+
+    assert no_external_severity(False) == Severity.FAIL
+    assert no_external_severity(True) == Severity.WARN
+    assert external_device_severity(0x00) == Severity.PASS
+    assert external_device_severity(0x80) == Severity.WARN
+    assert xl330_voltage_severity(5.0) == Severity.PASS
+    assert xl330_voltage_severity(7.2) == Severity.FAIL
+    dry_run = CommandResult(
+        "configure",
+        [Finding(Severity.PASS, "CONFIGURATION_DRY_RUN", "validated")],
+        mode="DRY_RUN",
+    )
+    assert dry_run.severity == Severity.PASS
+    assert dry_run.summary()["exit_code"] == 0
+    warning = CommandResult(
+        "scan", [Finding(Severity.WARN, "DEVICE_ALERT", "alert")]
+    )
+    failure = CommandResult(
+        "check",
+        [
+            Finding(Severity.PASS, "IMU_READY", "ready"),
+            Finding(Severity.FAIL, "XL330_VOLTAGE_OUT_OF_RANGE", "overvoltage"),
+        ],
+    )
+    assert warning.severity == Severity.WARN
+    assert failure.severity == Severity.FAIL
+
+    class SelfTestStream(io.StringIO):
+        def __init__(self, tty: bool) -> None:
+            super().__init__()
+            self.tty = tty
+
+        def isatty(self) -> bool:
+            return self.tty
+
+    plain = SelfTestStream(False)
+    Reporter("check", "auto", plain, {}).finalize(failure)
+    plain_text = plain.getvalue()
+    assert "\x1b[" not in plain_text
+    assert plain_text.count("FINAL RESULT:") == 1
+    assert plain_text.rstrip().endswith(
+        "RESULT command=check status=FAIL pass=1 warn=0 fail=1 external=0"
+    )
+    colored = SelfTestStream(True)
+    Reporter("scan", "auto", colored, {}).finalize(warning)
+    assert "\x1b[" in colored.getvalue()
+    no_color = SelfTestStream(True)
+    Reporter("scan", "auto", no_color, {"NO_COLOR": "1"}).finalize(warning)
+    assert "\x1b[" not in no_color.getvalue()
+    forced = SelfTestStream(False)
+    Reporter("scan", "always", forced, {"NO_COLOR": "1"}).finalize(warning)
+    assert "\x1b[" in forced.getvalue()
+
+    add_finding(
+        args,
+        Severity.PASS,
+        "SELF_TESTS_PASSED",
+        "protocol, classification, exit-code, and color-output tests passed",
+    )
 
 
 def add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -973,6 +1365,16 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--internal-id", type=parse_int, default=INTERNAL_ID_DEFAULT)
     parser.add_argument("--timeout", type=float, default=0.08)
+    add_output_arguments(parser)
+
+
+def add_output_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--color",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="terminal color mode (default: auto; also respects NO_COLOR)",
+    )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -985,6 +1387,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     scan.add_argument("--ids", type=parse_id_spec, default=parse_id_spec("0-253"))
     scan.add_argument("--retries", type=int, default=3)
     scan.add_argument("--scan-timeout", type=float, default=0.025)
+    scan.add_argument(
+        "--allow-no-external",
+        action="store_true",
+        help="downgrade an empty external-device scan from FAIL to WARN",
+    )
     scan.add_argument("--json-out")
     scan.set_defaults(handler=command_scan)
 
@@ -1005,6 +1412,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     check.add_argument("--samples", type=positive_int, default=20)
     check.add_argument("--interval", type=nonnegative_float, default=0.05)
     check.add_argument("--show-samples", action="store_true")
+    check.add_argument(
+        "--allow-no-external",
+        action="store_true",
+        help="downgrade an empty external-device scan from FAIL to WARN",
+    )
     check.add_argument("--json-out")
     check.set_defaults(handler=command_check)
 
@@ -1031,6 +1443,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     configure.set_defaults(handler=command_configure)
 
     self_test = subparsers.add_parser("self-test", help="run protocol self-tests")
+    add_output_arguments(self_test)
     self_test.set_defaults(handler=command_self_test)
     return parser
 
@@ -1038,11 +1451,18 @@ def build_argument_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_argument_parser()
     args = parser.parse_args(argv)
+    args.command_result = CommandResult(args.command, [])
+    args.reporter = Reporter(args.command, args.color)
     try:
-        return int(args.handler(args))
-    except (ToolError, OSError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
-        return 2
+        args.handler(args)
+    except Exception as error:
+        add_finding(
+            args,
+            Severity.FAIL,
+            "COMMAND_EXCEPTION",
+            f"{type(error).__name__}: {error}",
+        )
+    return args.reporter.finalize(args.command_result)
 
 
 if __name__ == "__main__":

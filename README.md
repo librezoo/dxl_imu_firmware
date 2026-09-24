@@ -195,7 +195,25 @@ python tools\dxl_softbus_tool.py check --port $softbusPort `
 添加 `--show-samples` 可逐条显示陀螺仪角速度和四元数。`check` 默认只扫描板内
 当前总线波特率；显式传入 `--bauds 57600 115200 1000000 2000000 3000000`
 可检查全部支持的速率。状态包中的 `0x80` Alert 会被报告为警告，不会再导致
-扫描中止；低 7 位协议错误仍会失败。
+扫描中止；低 7 位协议错误仍会失败。默认未找到外部设备属于 FAIL；仅检查 IMU
+时添加 `--allow-no-external`，将其降级为 WARN。
+
+全部子命令使用统一结果分级：
+
+| 状态 | 退出码 | 含义 |
+|---|---:|---|
+| `PASS` | 0 | 所有要求均通过 |
+| `WARN` | 1 | 命令完成，但存在 Alert、粘滞诊断位或允许的空扫描等警告 |
+| `FAIL` | 2 | 检查失败、设备状态危险或命令发生异常 |
+
+交互终端默认显示绿/黄/红状态和最终大标题；重定向输出或设置 `NO_COLOR` 时自动
+使用纯文本。可用 `--color auto|always|never` 显式控制。最后一行始终不带颜色，
+可供 PowerShell 或 CI 解析：
+
+```text
+==================== FINAL RESULT: FAIL ====================
+RESULT command=check status=FAIL pass=5 warn=1 fail=3 external=1
+```
 
 常用结果字段：
 
@@ -203,15 +221,28 @@ python tools\dxl_softbus_tool.py check --port $softbusPort `
 |---|---|
 | `IMU ... status=0x0003` | IMU 样本有效且初始化完成 |
 | `IMU_SAMPLES ... quaternion_valid=N` | N 个四元数样本通过有限值与范数检查 |
-| `FOUND` / `DEVICE` | 找到一个真实总线设备；板内 ID 200 不计入外部设备数 |
+| `[PASS] DEVICE_FOUND` | 找到一个无 Alert 的真实总线设备 |
+| `[WARN] DEVICE_ALERT` | 找到设备，但其状态包带 `0x80` Alert |
 | `alert=True` / `status_error=0x80` | 设备正常回复，但同时报告硬件警告 |
-| `TOTAL_EXTERNAL_RESPONDERS=N` | 扫描到的外部设备总数 |
-| `CHECK_WARNINGS=N` | 检查完成但存在 N 条诊断警告；不是“没有设备” |
-| `CHECK_OK` | 本次检查未发现警告 |
+| `TOTAL_EXTERNAL_RESPONDERS` | 扫描到的外部设备总数；板内 ID 200 不计入 |
+| `FINAL RESULT` / `RESULT` | 最终人工可读状态及机器可读统计 |
 
 诊断状态位 4–6 为粘滞记录，出现 `softbus_rx_overflow` 等提示时代表启动以来曾经
 发生过对应事件；可在复位后重新运行 `check`，判断它是否持续复现。执行串口测试
 时不要让 WCH-Link 保持调试附着，否则调试器可能临时改变目标时钟并干扰 UART。
+`check --json-out` 保留 IMU、外部设备和 `warnings` 字段，并增加结构化 `findings`
+及 `result`，便于程序按稳定检查码和严重度处理。
+
+PowerShell 可直接检查退出码：
+
+```powershell
+python tools\dxl_softbus_tool.py check --port $softbusPort --ids 0-253
+switch ($LASTEXITCODE) {
+  0 { 'PASS' }
+  1 { 'WARN：请查看黄色诊断项' }
+  2 { 'FAIL：请查看红色失败项' }
+}
+```
 
 全波特率、全 ID 扫描：
 
