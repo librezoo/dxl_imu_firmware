@@ -10,11 +10,8 @@
 #include "ch32v20x_exti.h"
 #include "ch32v20x_iwdg.h"
 #include "ch32v20x_misc.h"
-#ifndef IMU_POWER_DEBUG_CLI
 #include "imu_power/softbus.h"
-#else
 #include "imu_power/maintenance.h"
-#endif
 
 #include <string.h>
 
@@ -23,7 +20,7 @@
 #define CONFIG_PAGE_SIZE 4096u
 #define DXL_RX_SIZE IMU_POWER_CH32_RX_SIZE
 #define DXL_TX_SIZE 512u
-#define DEBUG_BUS_BAUDRATE 1000000u
+#define SOFTBUS_BAUDRATE 1000000u
 #define IMU_REG_WHO_AM_I 0x0Fu
 #define IMU_REG_CTRL1_XL 0x10u
 #define IMU_REG_CTRL2_G 0x11u
@@ -53,19 +50,16 @@ static uint8_t dxl_response[DXL_TX_SIZE];
 static uint32_t dxl_last_rx_ms;
 static volatile uint32_t systick_ms;
 static uint8_t imu_ready;
-#ifdef IMU_POWER_DEBUG_CLI
 static char debug_line[128];
 static uint16_t debug_line_len;
-#else
 static imu_power_softbus_t softbus;
-static uint8_t debug_dma_rx[IMU_POWER_SOFTBUS_MAX_BURST];
-static volatile uint16_t debug_burst_length;
-static volatile uint8_t debug_burst_ready;
-static volatile uint8_t debug_burst_overflow;
-static uint8_t debug_tx_dma_active;
-static uint16_t debug_tx_dma_length;
-static uint8_t debug_injection_pending_end;
-#endif
+static uint8_t softbus_dma_rx[IMU_POWER_SOFTBUS_MAX_BURST];
+static volatile uint16_t softbus_burst_length;
+static volatile uint8_t softbus_burst_ready;
+static volatile uint8_t softbus_burst_overflow;
+static uint8_t softbus_tx_dma_active;
+static uint16_t softbus_tx_dma_length;
+static uint8_t softbus_injection_pending_end;
 static uint32_t last_sample_ms;
 static uint32_t last_recovery_ms;
 static volatile uint8_t imu_sample_pending;
@@ -87,28 +81,26 @@ void EXTI15_10_IRQHandler(void)
     }
 }
 
-#ifndef IMU_POWER_DEBUG_CLI
-void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-void USART1_IRQHandler(void)
+void USART2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USART2_IRQHandler(void)
 {
-    uint32_t status = USART1->STATR;
+    uint32_t status = USART2->STATR;
     if ((status & USART_FLAG_IDLE) != 0u) {
         uint16_t remaining;
-        DMA_Cmd(DMA1_Channel5, DISABLE);
-        USART_DMACmd(USART1, USART_DMAReq_Rx, DISABLE);
-        remaining = DMA_GetCurrDataCounter(DMA1_Channel5);
+        DMA_Cmd(DMA1_Channel6, DISABLE);
+        USART_DMACmd(USART2, USART_DMAReq_Rx, DISABLE);
+        remaining = DMA_GetCurrDataCounter(DMA1_Channel6);
         /* IDLE/error flags are cleared by reading STATR followed by DATAR. */
-        (void)USART1->DATAR;
-        if (debug_burst_ready ||
+        (void)USART2->DATAR;
+        if (softbus_burst_ready ||
             (status & (USART_FLAG_ORE | USART_FLAG_NE | USART_FLAG_FE)) != 0u ||
             (remaining == 0u && (status & USART_FLAG_RXNE) != 0u)) {
-            debug_burst_overflow = 1u;
+            softbus_burst_overflow = 1u;
         }
-        debug_burst_length = (uint16_t)(IMU_POWER_SOFTBUS_MAX_BURST - remaining);
-        debug_burst_ready = 1u;
+        softbus_burst_length = (uint16_t)(IMU_POWER_SOFTBUS_MAX_BURST - remaining);
+        softbus_burst_ready = 1u;
     }
 }
-#endif
 
 static bool flash_read(void *context, unsigned slot, void *dst, size_t size)
 {
@@ -263,19 +255,17 @@ static void sample_update(imu_power_device_t *device)
     imu_power_device_set_sample(device, &sample);
 }
 
-#ifndef IMU_POWER_DEBUG_CLI
-static void debug_rx_start(void)
+static void softbus_rx_start(void)
 {
-    DMA_Cmd(DMA1_Channel5, DISABLE);
-    DMA_ClearFlag(DMA1_FLAG_GL5);
-    DMA_SetCurrDataCounter(DMA1_Channel5, IMU_POWER_SOFTBUS_MAX_BURST);
-    debug_burst_length = 0u;
-    debug_burst_ready = 0u;
-    debug_burst_overflow = 0u;
-    USART_DMACmd(USART1, USART_DMAReq_Rx, ENABLE);
-    DMA_Cmd(DMA1_Channel5, ENABLE);
+    DMA_Cmd(DMA1_Channel6, DISABLE);
+    DMA_ClearFlag(DMA1_FLAG_GL6);
+    DMA_SetCurrDataCounter(DMA1_Channel6, IMU_POWER_SOFTBUS_MAX_BURST);
+    softbus_burst_length = 0u;
+    softbus_burst_ready = 0u;
+    softbus_burst_overflow = 0u;
+    USART_DMACmd(USART2, USART_DMAReq_Rx, ENABLE);
+    DMA_Cmd(DMA1_Channel6, ENABLE);
 }
-#endif
 
 static void gpio_uart_spi_init(uint32_t baudrate)
 {
@@ -284,7 +274,7 @@ static void gpio_uart_spi_init(uint32_t baudrate)
     SPI_InitTypeDef spi = {0};
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_SPI1 |
                            RCC_APB2Periph_AFIO, ENABLE);
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2 | RCC_APB1Periph_USART3, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
     AFIO->PCFR1 = (AFIO->PCFR1 & ~AFIO_PCFR1_SWJ_CFG) | AFIO_PCFR1_SWJ_CFG_JTAGDISABLE;
@@ -293,9 +283,16 @@ static void gpio_uart_spi_init(uint32_t baudrate)
     gpio.GPIO_Pin = GPIO_Pin_6; gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING; GPIO_Init(GPIOA, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_0; gpio.GPIO_Mode = GPIO_Mode_Out_PP; GPIO_Init(GPIOB, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_14 | GPIO_Pin_15; gpio.GPIO_Mode = GPIO_Mode_IPU; GPIO_Init(GPIOB, &gpio);
+    /* USART3 is the physical half-duplex DXL bus behind the PA15 enable. */
     gpio.GPIO_Pin = GPIO_Pin_10; gpio.GPIO_Mode = GPIO_Mode_AF_OD; GPIO_Init(GPIOB, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_11; gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING; GPIO_Init(GPIOB, &gpio);
     gpio.GPIO_Pin = GPIO_Pin_15; gpio.GPIO_Mode = GPIO_Mode_Out_PP; GPIO_Init(GPIOA, &gpio);
+    /* USART2 is the fixed-rate raw soft-bus controller port. */
+    gpio.GPIO_Pin = GPIO_Pin_2; gpio.GPIO_Mode = GPIO_Mode_AF_PP; GPIO_Init(GPIOA, &gpio);
+    /* UART idle is high. Pull up an undriven soft-bus RX so noise cannot be
+       injected onto the physical DXL bus. */
+    gpio.GPIO_Pin = GPIO_Pin_3; gpio.GPIO_Mode = GPIO_Mode_IPU; GPIO_Init(GPIOA, &gpio);
+    /* USART1 remains the 115200 text maintenance port. */
     gpio.GPIO_Pin = GPIO_Pin_9; gpio.GPIO_Mode = GPIO_Mode_AF_PP; GPIO_Init(GPIOA, &gpio);
     /* UART idle is high. Keep an undriven DEBUG RX from collecting noise that
        the transparent bridge would inject onto the motor bus. */
@@ -321,13 +318,10 @@ static void gpio_uart_spi_init(uint32_t baudrate)
     uart.USART_StopBits = USART_StopBits_1; uart.USART_Parity = USART_Parity_No;
     uart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     uart.USART_Mode = USART_Mode_Tx | USART_Mode_Rx; USART_Init(USART3, &uart); USART_Cmd(USART3, ENABLE);
-    uart.USART_BaudRate =
-#ifdef IMU_POWER_DEBUG_CLI
-        115200u;
-#else
-        DEBUG_BUS_BAUDRATE;
-#endif
+    uart.USART_BaudRate = 115200u;
     USART_Init(USART1, &uart); USART_Cmd(USART1, ENABLE);
+    uart.USART_BaudRate = SOFTBUS_BAUDRATE;
+    USART_Init(USART2, &uart); USART_Cmd(USART2, ENABLE);
     {
         DMA_InitTypeDef dma = {0};
         DMA_DeInit(DMA1_Channel3);
@@ -346,13 +340,12 @@ static void gpio_uart_spi_init(uint32_t baudrate)
         DMA_Cmd(DMA1_Channel3, ENABLE);
         USART_DMACmd(USART3, USART_DMAReq_Rx, ENABLE);
     }
-#ifndef IMU_POWER_DEBUG_CLI
     {
         DMA_InitTypeDef dma = {0};
         NVIC_InitTypeDef nvic = {0};
-        DMA_DeInit(DMA1_Channel5);
-        dma.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DATAR;
-        dma.DMA_MemoryBaseAddr = (uint32_t)debug_dma_rx;
+        DMA_DeInit(DMA1_Channel6);
+        dma.DMA_PeripheralBaseAddr = (uint32_t)&USART2->DATAR;
+        dma.DMA_MemoryBaseAddr = (uint32_t)softbus_dma_rx;
         dma.DMA_DIR = DMA_DIR_PeripheralSRC;
         dma.DMA_BufferSize = IMU_POWER_SOFTBUS_MAX_BURST;
         dma.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -362,33 +355,28 @@ static void gpio_uart_spi_init(uint32_t baudrate)
         dma.DMA_Mode = DMA_Mode_Normal;
         dma.DMA_Priority = DMA_Priority_VeryHigh;
         dma.DMA_M2M = DMA_M2M_Disable;
-        DMA_Init(DMA1_Channel5, &dma);
+        DMA_Init(DMA1_Channel6, &dma);
         imu_power_softbus_init(&softbus);
-        debug_rx_start();
+        softbus_rx_start();
         /* Clear any stale IDLE state before enabling the interrupt. */
-        (void)USART1->STATR;
-        (void)USART1->DATAR;
-        USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);
-        nvic.NVIC_IRQChannel = USART1_IRQn;
+        (void)USART2->STATR;
+        (void)USART2->DATAR;
+        USART_ITConfig(USART2, USART_IT_IDLE, ENABLE);
+        nvic.NVIC_IRQChannel = USART2_IRQn;
         nvic.NVIC_IRQChannelPreemptionPriority = 1u;
         nvic.NVIC_IRQChannelSubPriority = 0u;
         nvic.NVIC_IRQChannelCmd = ENABLE;
         NVIC_Init(&nvic);
     }
-#endif
     dxl_direction(false); spi_cs(false);
 }
 
-static bool bus_send(const uint8_t *data, size_t length, bool debug_origin)
+static bool bus_send(const uint8_t *data, size_t length, bool softbus_origin)
 {
     DMA_InitTypeDef tx = {0};
     if (data == NULL || length == 0u || length > DXL_TX_SIZE) return false;
-#ifndef IMU_POWER_DEBUG_CLI
-    if (debug_origin &&
+    if (softbus_origin &&
         !imu_power_softbus_begin_injection(&softbus, data, length)) return false;
-#else
-    (void)debug_origin;
-#endif
     dxl_direction(true);
     DMA_DeInit(DMA1_Channel2);
     tx.DMA_PeripheralBaseAddr = (uint32_t)&USART3->DATAR;
@@ -427,17 +415,14 @@ static void handle_dxl_byte(imu_power_device_t *device, uint8_t value)
             device, &frame, dxl_response, sizeof(dxl_response));
         if (response_length != 0u &&
             bus_send(dxl_response, response_length, false)) {
-#ifndef IMU_POWER_DEBUG_CLI
             /* The target board's RX path does not monitor local TX. Queue the
-               exact status bytes that were physically transmitted. */
+               exact status bytes for the USART2 soft-bus controller. */
             (void)imu_power_softbus_queue_debug(&softbus, dxl_response,
                                                 response_length);
-#endif
         }
     }
 }
 
-#ifdef IMU_POWER_DEBUG_CLI
 static void debug_write(const char *text)
 {
     while (*text != '\0') {
@@ -447,7 +432,7 @@ static void debug_write(const char *text)
     while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET) {}
 }
 
-static void debug_poll(imu_power_device_t *device)
+static void debug_cli_poll(imu_power_device_t *device)
 {
     while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) != RESET) {
         char c = (char)USART_ReceiveData(USART1);
@@ -466,7 +451,7 @@ static void debug_poll(imu_power_device_t *device)
         }
     }
 }
-#else
+
 static void softbus_apply_events(imu_power_device_t *device)
 {
     uint16_t events = imu_power_softbus_take_events(&softbus);
@@ -480,23 +465,23 @@ static void softbus_apply_events(imu_power_device_t *device)
     }
 }
 
-static void debug_tx_poll(void)
+static void softbus_tx_poll(void)
 {
     const uint8_t *data;
     size_t length;
-    if (debug_tx_dma_active) {
-        if (DMA_GetFlagStatus(DMA1_FLAG_TC4) == RESET) return;
-        DMA_Cmd(DMA1_Channel4, DISABLE);
-        USART_DMACmd(USART1, USART_DMAReq_Tx, DISABLE);
-        DMA_ClearFlag(DMA1_FLAG_GL4);
-        imu_power_softbus_tx_consume(&softbus, debug_tx_dma_length);
-        debug_tx_dma_active = 0u;
-        debug_tx_dma_length = 0u;
+    if (softbus_tx_dma_active) {
+        if (DMA_GetFlagStatus(DMA1_FLAG_TC7) == RESET) return;
+        DMA_Cmd(DMA1_Channel7, DISABLE);
+        USART_DMACmd(USART2, USART_DMAReq_Tx, DISABLE);
+        DMA_ClearFlag(DMA1_FLAG_GL7);
+        imu_power_softbus_tx_consume(&softbus, softbus_tx_dma_length);
+        softbus_tx_dma_active = 0u;
+        softbus_tx_dma_length = 0u;
     }
     length = imu_power_softbus_tx_peek(&softbus, &data);
     if (length != 0u) {
         DMA_InitTypeDef tx = {0};
-        tx.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DATAR;
+        tx.DMA_PeripheralBaseAddr = (uint32_t)&USART2->DATAR;
         tx.DMA_MemoryBaseAddr = (uint32_t)data;
         tx.DMA_DIR = DMA_DIR_PeripheralDST;
         tx.DMA_BufferSize = (uint16_t)length;
@@ -507,28 +492,28 @@ static void debug_tx_poll(void)
         tx.DMA_Mode = DMA_Mode_Normal;
         tx.DMA_Priority = DMA_Priority_High;
         tx.DMA_M2M = DMA_M2M_Disable;
-        DMA_DeInit(DMA1_Channel4);
-        DMA_Init(DMA1_Channel4, &tx);
-        DMA_ClearFlag(DMA1_FLAG_GL4);
-        debug_tx_dma_length = (uint16_t)length;
-        debug_tx_dma_active = 1u;
-        USART_DMACmd(USART1, USART_DMAReq_Tx, ENABLE);
-        DMA_Cmd(DMA1_Channel4, ENABLE);
+        DMA_DeInit(DMA1_Channel7);
+        DMA_Init(DMA1_Channel7, &tx);
+        DMA_ClearFlag(DMA1_FLAG_GL7);
+        softbus_tx_dma_length = (uint16_t)length;
+        softbus_tx_dma_active = 1u;
+        USART_DMACmd(USART2, USART_DMAReq_Tx, ENABLE);
+        DMA_Cmd(DMA1_Channel7, ENABLE);
     }
 }
 
-static void debug_poll(imu_power_device_t *device)
+static void softbus_poll(imu_power_device_t *device)
 {
     uint16_t length;
     uint8_t overflow;
     uint8_t sent = 0u;
-    debug_tx_poll();
-    if (!debug_burst_ready) return;
-    length = debug_burst_length;
-    overflow = debug_burst_overflow;
+    softbus_tx_poll();
+    if (!softbus_burst_ready) return;
+    length = softbus_burst_length;
+    overflow = softbus_burst_overflow;
     if (overflow || length == 0u ||
         imu_power_softbus_echo_pending(&softbus) ||
-        !bus_send(debug_dma_rx, length, true)) {
+        !bus_send(softbus_dma_rx, length, true)) {
         if (overflow || length != 0u) {
             device->diagnostics.status_flags |= IMU_POWER_STATUS_SOFTBUS_RX_OVERFLOW;
             ++device->diagnostics.error_count;
@@ -537,14 +522,13 @@ static void debug_poll(imu_power_device_t *device)
         uint16_t i;
         sent = 1u;
         /* Always feed the internal device directly. A physical request echo,
-           when present, is suppressed from both DEBUG and the local parser. */
-        for (i = 0u; i < length; ++i) handle_dxl_byte(device, debug_dma_rx[i]);
+           when present, is suppressed from both soft-bus TX and the parser. */
+        for (i = 0u; i < length; ++i) handle_dxl_byte(device, softbus_dma_rx[i]);
     }
-    debug_rx_start();
-    if (sent) debug_injection_pending_end = 1u;
+    softbus_rx_start();
+    if (sent) softbus_injection_pending_end = 1u;
     softbus_apply_events(device);
 }
-#endif
 
 void imu_power_ch32_port_init(imu_power_device_t *device)
 {
@@ -577,39 +561,31 @@ static void bus_rx_poll(imu_power_device_t *device)
     while (dxl_rx_tail != dma_head) {
         uint8_t value = dxl_dma_rx[dxl_rx_tail];
         dxl_rx_tail = (uint16_t)((dxl_rx_tail + 1u) % DXL_RX_SIZE);
-#ifndef IMU_POWER_DEBUG_CLI
         {
             bool suppressed = false;
             (void)imu_power_softbus_observe_bus_byte(&softbus, value,
                                                      &suppressed);
             if (suppressed) continue;
         }
-#endif
         handle_dxl_byte(device, value);
     }
 }
 
 void imu_power_ch32_port_poll(imu_power_device_t *device)
 {
-#ifndef IMU_POWER_DEBUG_CLI
     /* Drain pre-existing bus traffic before installing a new request echo
        matcher. Then process the injected burst's echo immediately. */
-    debug_tx_poll();
+    softbus_tx_poll();
     bus_rx_poll(device);
-    debug_poll(device);
+    softbus_poll(device);
     bus_rx_poll(device);
-    if (debug_injection_pending_end) {
+    if (softbus_injection_pending_end) {
         imu_power_softbus_end_injection(&softbus);
-        debug_injection_pending_end = 0u;
+        softbus_injection_pending_end = 0u;
     }
-#else
-    debug_poll(device);
-    bus_rx_poll(device);
-#endif
-#ifndef IMU_POWER_DEBUG_CLI
-    debug_tx_poll();
+    debug_cli_poll(device);
+    softbus_tx_poll();
     softbus_apply_events(device);
-#endif
     if (dxl_rx.length != 0u && (uint32_t)(systick_ms - dxl_last_rx_ms) > 30u) {
         dxl_rx.length = 0u;
         ++device->diagnostics.error_count;

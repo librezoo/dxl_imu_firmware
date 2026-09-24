@@ -24,26 +24,26 @@ typedef struct {
 
 void imu_power_softbus_init(imu_power_softbus_t *bridge);
 
-/* Record a DEBUG-originated burst whose exact physical-bus echo must not be
-   returned to DEBUG. Only one echo can be pending at a time. */
+/* Record a controller-originated burst whose exact physical-bus echo must not
+   be returned to the soft-bus controller. Only one echo can be pending. */
 bool imu_power_softbus_begin_injection(imu_power_softbus_t *bridge,
                                        const uint8_t *data, size_t length);
 bool imu_power_softbus_echo_pending(const imu_power_softbus_t *bridge);
 void imu_power_softbus_end_injection(imu_power_softbus_t *bridge);
 
 /* Observe one byte exactly as received by the real bus UART. Matching request
-   echo bytes are suppressed; every other byte is queued for DEBUG TX. The
+   echo bytes are suppressed; every other byte is queued for soft-bus TX. The
    optional suppressed result lets the local DXL parser avoid handling a
    physical request echo twice. */
 bool imu_power_softbus_observe_bus_byte(imu_power_softbus_t *bridge,
                                         uint8_t byte, bool *suppressed);
 
 /* Queue bytes generated locally (for example the internal IMU's physical
-   status packet) when the board's receive path does not monitor local TX. */
+   status packet) for soft-bus TX when the receive path does not monitor TX. */
 bool imu_power_softbus_queue_debug(imu_power_softbus_t *bridge,
                                    const uint8_t *data, size_t length);
 
-/* Return the largest contiguous DEBUG TX span currently available. */
+/* Return the largest contiguous soft-bus TX span currently available. */
 size_t imu_power_softbus_tx_peek(const imu_power_softbus_t *bridge,
                                  const uint8_t **data);
 void imu_power_softbus_tx_consume(imu_power_softbus_t *bridge, size_t length);

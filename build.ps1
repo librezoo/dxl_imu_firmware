@@ -86,7 +86,7 @@ $compileFlags = @(
     '-DIMU_POWER_CH32', '-DCH32V20x_D6', '-MMD', '-MP'
 )
 if ($DebugCli) {
-    $compileFlags += '-DIMU_POWER_DEBUG_CLI=1'
+    Write-Warning '-DebugCli is deprecated; USART1 115200 text CLI is enabled in every build.'
 }
 foreach ($include in @('include', 'platform', "$sdk/Core", "$sdk/Debug", "$sdk/Peripheral/inc", $system)) {
     $compileFlags += '-I' + (Join-Path $repoRoot $include)

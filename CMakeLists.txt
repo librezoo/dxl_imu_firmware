@@ -41,7 +41,7 @@ add_test(NAME imu_power_softbus_tests COMMAND imu_power_softbus_tests)
 
 # The MCU SDK is committed with the firmware; no external SDK is required.
 option(IMU_POWER_BUILD_CH32 "Build CH32V203C8U6 firmware" OFF)
-option(IMU_POWER_DEBUG_CLI "Use the legacy 115200 DEBUG UART text CLI" OFF)
+option(IMU_POWER_DEBUG_CLI "Deprecated compatibility option; USART1 CLI is always enabled" OFF)
 if(IMU_POWER_BUILD_CH32)
     enable_language(ASM)
     set(IMU_POWER_WCH_EVT "${CMAKE_CURRENT_SOURCE_DIR}/vendor/wch-ch32v20x/EVT")
@@ -81,7 +81,7 @@ if(IMU_POWER_BUILD_CH32)
     )
     target_compile_definitions(imu_power_ch32 PRIVATE IMU_POWER_CH32 CH32V20x_D6)
     if(IMU_POWER_DEBUG_CLI)
-        target_compile_definitions(imu_power_ch32 PRIVATE IMU_POWER_DEBUG_CLI=1)
+        message(STATUS "IMU_POWER_DEBUG_CLI is deprecated; USART1 CLI is enabled in every build")
     endif()
     target_include_directories(imu_power_ch32 PRIVATE
         include platform ${WCH_SRC}/Core ${WCH_SRC}/Debug

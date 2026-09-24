@@ -27,7 +27,9 @@
 - [firmware-20260917 / 0x0207](releases/firmware-20260917.md)
 - [firmware-20260916 / 0x0206](releases/firmware-20260916.md)
 
-当前版本为 `firmware-20260918-0x0209`；旧版本说明保留各自的历史验证范围。
+当前源码诊断版本为尚未发布的 `0x020A`；最新发布版本为
+`firmware-20260918-0x0209`。0x020A 将软总线迁移到 USART2 PA2/PA3，并让
+USART1 PA9/PA10 的 115200 文本 CLI 默认常开。
 
 ## 历史背景
 

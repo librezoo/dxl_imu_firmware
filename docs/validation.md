@@ -96,3 +96,54 @@ ID 2，两台均型号 1200、固件 52，ID 3 不再响应。
 要求修改为 ID 3 / 1 Mbps；写前后 torque=0、hardware_error=0。最终扫描发现
 ID 1/2/3 均在 1 Mbps，`SYNC_READ(124,12,[200,1,2,3])` 50 Hz 冒烟测试
 100/100 成功，平均延迟 3.75 ms、最大 4.95 ms。
+
+## 2026-09-24：USART2 软总线与 USART1 常开 CLI 0x0209
+
+将原始软总线入口从 USART1 PA9/PA10 迁移到 USART2 PA2/PA3。USART2 RX/TX
+分别使用 DMA1 Channel 6/7，保持固定 1 Mbps、8N1；USART1 PA9/PA10 恢复为
+固定 115200、8N1 文本维护口，并与软总线同时运行。USART3 PB10/PB11、
+DMA1 Channel 2/3 和 PA15 方向控制继续专用于真实 Dynamixel 总线。
+
+- Windows MSVC Release 宿主构建与 CTest：6/6 通过。
+- Python `dxl_softbus_tool.py self-test`：通过。
+- MounRiver GCC 8.2.0 PowerShell 默认构建成功：text 15,904 字节、data 48
+  字节、BSS 10,436 字节；BIN 15,952 字节。
+- PowerShell 默认入口、旧 `-DebugCli` 兼容入口和 CMake MCU 入口生成的 BIN
+  完全一致，SHA-256 均为
+  `d7319cc1a7115d8f450a4489a0f654080e656e645c42fe44eb294f6816f115b4`。
+
+随后通过 WCH-LinkE 对 CH32V203C8U6（UID `cd-ab-11-5d-4c-be-2a-c7`）解除
+读保护并烧录。烧录后读回的 15,952 字节与构建 BIN 完全一致，SHA-256 仍为
+`d7319cc1a7115d8f450a4489a0f654080e656e645c42fe44eb294f6816f115b4`。
+
+在 WCH-Link 脱离调试并复位后完成标准速率实测：
+
+- USART2 PA2/PA3 通过 FTDI COM16 在 1 Mbps 读取内部 ID 200，诊断版本
+  `0x0209`、状态 `3`、`last_error=0`。
+- 连续普通 `READ(124,12)` 300/300 成功，平均 15.99 ms、最大 16.23 ms。
+- 连续 `SYNC_READ(124,12,[200])` 100/100 成功，平均 15.99 ms、最大
+  16.16 ms；样本计数从 13,856 增加到 15,358。
+- USART1 PA9/PA10 通过 WCH-Link COM9 在 115200 下执行 `get`、`diag`、
+  `dump-imu`、`dump-errors` 全部成功；最终状态 `3`、错误计数 0、IMU valid=1。
+- USART3 真实总线依次验证 57,600、115,200、1M、2M、3M 配置切换并最终恢复
+  1 Mbps，但五档全 ID 扫描均未发现外部响应者，因此 0x0209 的外部设备转发
+  闭环仍待总线设备正确接入并供电后验证。
+
+随后接入一台 XL330-M288。通过 COM16 的 1 Mbps USART2 软总线扫描发现 ID 3、
+型号 1200、固件 53，确认 USART2 请求转发、USART3 真实总线和回复镜像链路均可用。
+Python 工具新增统一 `check` 命令，并将状态包 bit 7 `0x80` 按 Alert 而非协议错误
+处理；低 7 位错误仍保持失败。只读综合检查得到：
+
+- IMU 20/20 样本唯一、20/20 四元数有效，观测更新率约 244.4 Hz，样本年龄
+  1 ms，`last_error=0`。
+- ID 3 能在 Alert 状态下继续被扫描并读取控制表；工具正确报告其输入电压错误、
+  电压、温度、扭矩和 Shutdown 状态，而不会中止整次扫描。
+- 当前诊断状态 `0x0013` 包含正常的 sample-valid/IMU-ready，以及此前压力操作留下
+  的粘滞 softbus-RX-overflow 位；工具将状态位名称明确列出。
+
+本次设备检查只读，不修改舵机寄存器。现场舵机保护设置和供电状态属于外部测试
+条件，不作为固件放行配置。
+
+调试过程中确认：WCH-Link 调试附着会临时改变目标 PLL，使保持附着时 UART
+速率约增加 25%。这不是外部 8 MHz 晶振错误；串口实测必须在 WCH-Link 脱离
+调试并复位后进行。

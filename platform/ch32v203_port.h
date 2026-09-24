@@ -4,7 +4,7 @@
 #include "imu_power/device.h"
 
 /* Keep the circular physical-bus RX buffer larger than the maximum 512-byte
-   DEBUG burst so one complete loopback cannot make head equal tail. */
+   USART2 soft-bus burst so one complete loopback cannot make head equal tail. */
 #define IMU_POWER_CH32_RX_SIZE 1024u
 
 /* DMA's remaining count can be zero immediately before circular reload. */

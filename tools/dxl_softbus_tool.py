@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Scan and safely reconfigure DYNAMIXEL devices through the DEBUG soft bus.
+"""Scan and safely reconfigure DYNAMIXEL devices through the USART2 soft bus.
 
-The DEBUG UART is always opened at 1 Mbps by default.  The script uses the
+The PA2/PA3 soft-bus UART is opened at 1 Mbps by default.  The script uses the
 internal IMU node's maintenance registers to switch the real half-duplex bus,
 then restores the board bus in a finally block.
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import struct
 import sys
 import time
@@ -41,6 +42,13 @@ INTERNAL_COMMAND_ADDRESS = 197
 CMD_SAVE = 0x01
 CMD_UNLOCK = 0xA5
 CMD_UNLOCK_CONFIRM = 0x5A
+
+IMU_DATA_ADDRESS = 124
+IMU_DATA_LENGTH = 12
+IMU_CONFIG_ADDRESS = 184
+IMU_GYRO_DIAG_ADDRESS = 208
+DXL_ALERT_BIT = 0x80
+XL330_MODEL = 1200
 
 BOARD_BAUDS = (57_600, 115_200, 1_000_000, 2_000_000, 3_000_000)
 BOARD_BAUD_ENUM = {baud: index for index, baud in enumerate(BOARD_BAUDS)}
@@ -207,7 +215,10 @@ class SoftBus:
             if frame is None or frame.device_id != expected_id:
                 time.sleep(0.005)
                 continue
-            if frame.error and not allow_error:
+            # Bit 7 is the DYNAMIXEL Alert flag, not an instruction error.
+            # Keep the frame usable so scans can find a device whose red LED
+            # is reporting a hardware warning. The low seven bits remain fatal.
+            if (frame.error & 0x7F) and not allow_error:
                 raise ToolError(
                     f"device {expected_id} returned error 0x{frame.error:02x}"
                 )
@@ -360,6 +371,7 @@ class FoundDevice:
     device_id: int
     model: int | None
     firmware: int | None
+    status_error: int
 
 
 def scan_at_baud(
@@ -379,12 +391,26 @@ def scan_at_baud(
             continue
         model = struct.unpack_from("<H", frame.payload, 0)[0] if len(frame.payload) >= 2 else None
         firmware = frame.payload[2] if len(frame.payload) >= 3 else None
-        found.append(FoundDevice(baud, device_id, model, firmware))
+        found.append(FoundDevice(baud, device_id, model, firmware, frame.error))
     return found
 
 
 def parse_int(value: str) -> int:
     return int(value, 0)
+
+
+def positive_int(value: str) -> int:
+    parsed = parse_int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than zero")
+    return parsed
+
+
+def nonnegative_float(value: str) -> float:
+    parsed = float(value)
+    if parsed < 0.0:
+        raise argparse.ArgumentTypeError("value must not be negative")
+    return parsed
 
 
 def parse_id_spec(value: str) -> list[int]:
@@ -422,6 +448,178 @@ def read_servo_state(bus: SoftBus, device_id: int) -> dict[str, int]:
         "torque": bus.read_register(device_id, 64, 1)[0],
         "hardware_error": bus.read_register(device_id, 70, 1)[0],
     }
+
+
+def half_to_float(value: int) -> float:
+    return float(struct.unpack("<e", struct.pack("<H", value))[0])
+
+
+def inspect_imu(
+    bus: SoftBus, internal_id: int, sample_count: int, interval: float
+) -> dict[str, object]:
+    before = read_board_diagnostics(bus, internal_id)
+    init_registers = bus.read_register(internal_id, IMU_CONFIG_ADDRESS, 8)
+    gyro_diag = bus.read_register(internal_id, IMU_GYRO_DIAG_ADDRESS, 14)
+    raw_gyro = list(struct.unpack_from("<hhh", gyro_diag, 0))
+    bias = list(struct.unpack_from("<hhh", gyro_diag, 6))
+    samples: list[dict[str, object]] = []
+    started = time.monotonic()
+    for index in range(sample_count):
+        wire = bus.read_register(internal_id, IMU_DATA_ADDRESS, IMU_DATA_LENGTH)
+        gx, gy, gz, qx_half, qy_half, qz_half = struct.unpack("<hhhHHH", wire)
+        quaternion_xyz = [
+            half_to_float(qx_half),
+            half_to_float(qy_half),
+            half_to_float(qz_half),
+        ]
+        xyz_norm_sq = sum(value * value for value in quaternion_xyz)
+        quaternion_valid = (
+            any(value != 0.0 for value in quaternion_xyz)
+            and all(math.isfinite(value) for value in quaternion_xyz)
+            and xyz_norm_sq <= 1.02
+        )
+        samples.append(
+            {
+                "index": index,
+                "wire_hex": wire.hex(),
+                "gyro_counts": [gx, gy, gz],
+                "gyro_dps": [gx * 0.0175, gy * 0.0175, gz * 0.0175],
+                "quaternion_xyz": quaternion_xyz,
+                "quaternion_w_positive": (
+                    math.sqrt(max(0.0, 1.0 - xyz_norm_sq))
+                    if quaternion_valid
+                    else None
+                ),
+                "quaternion_valid": quaternion_valid,
+            }
+        )
+        if interval > 0.0 and index + 1 < sample_count:
+            time.sleep(interval)
+    elapsed = time.monotonic() - started
+    after = read_board_diagnostics(bus, internal_id)
+    gyro_axes = [
+        [float(sample["gyro_dps"][axis]) for sample in samples]  # type: ignore[index]
+        for axis in range(3)
+    ]
+    return {
+        "diagnostics_before": asdict(before),
+        "diagnostics_after": asdict(after),
+        "imu_init_registers": {
+            "who_am_i": init_registers[0],
+            "ctrl1_xl": init_registers[1],
+            "ctrl2_g": init_registers[2],
+            "ctrl3_c": init_registers[3],
+            "ctrl6": init_registers[4],
+            "ctrl8": init_registers[5],
+            "emb_func_en_a": init_registers[6],
+            "sflp_odr": init_registers[7],
+        },
+        "gyro_diagnostics": {
+            "raw_counts": raw_gyro,
+            "bias_125dps_counts": bias,
+            "bias_available": bool(gyro_diag[12]),
+            "sample_valid": bool(gyro_diag[13]),
+        },
+        "summary": {
+            "samples_requested": sample_count,
+            "unique_wire_samples": len({str(sample["wire_hex"]) for sample in samples}),
+            "valid_quaternion_samples": sum(
+                bool(sample["quaternion_valid"]) for sample in samples
+            ),
+            "sample_counter_delta": after.sample_counter - before.sample_counter,
+            "observed_sample_rate_hz": (
+                (after.sample_counter - before.sample_counter) / elapsed
+                if elapsed > 0.0
+                else 0.0
+            ),
+            "max_sample_age_us": max(before.sample_age_us, after.sample_age_us),
+            "gyro_dps_mean": [sum(axis) / len(axis) for axis in gyro_axes],
+            "gyro_dps_min": [min(axis) for axis in gyro_axes],
+            "gyro_dps_max": [max(axis) for axis in gyro_axes],
+        },
+        "samples": samples,
+    }
+
+
+def hardware_error_names(value: int) -> list[str]:
+    names = []
+    for mask, name in (
+        (0x01, "input_voltage"),
+        (0x04, "overheating"),
+        (0x10, "electrical_shock_or_power"),
+        (0x20, "overload"),
+    ):
+        if value & mask:
+            names.append(name)
+    unknown = value & ~0x35
+    if unknown:
+        names.append(f"unknown_0x{unknown:02x}")
+    return names
+
+
+def firmware_status_names(value: int) -> list[str]:
+    return [
+        name
+        for mask, name in (
+            (0x01, "sample_valid"),
+            (0x02, "imu_ready"),
+            (0x04, "imu_init_fault"),
+            (0x08, "imu_fifo_fault"),
+            (0x10, "softbus_rx_overflow"),
+            (0x20, "softbus_tx_overflow"),
+            (0x40, "softbus_echo_mismatch"),
+        )
+        if value & mask
+    ]
+
+
+def inspect_external_device(
+    bus: SoftBus, device: FoundDevice
+) -> dict[str, object]:
+    ping = bus.ping(device.device_id, retries=5, timeout=0.08)
+    if ping is None:
+        raise ToolError(f"device {device.device_id} stopped responding during inspection")
+    result: dict[str, object] = {
+        **asdict(device),
+        "status_error": ping.error,
+        "alert": bool(ping.error & DXL_ALERT_BIT),
+    }
+    if device.model != XL330_MODEL:
+        result["detail"] = "unsupported control table; PING data only"
+        return result
+
+    def value(address: int, length: int, *, signed: bool = False) -> int:
+        return int.from_bytes(
+            bus.read_register(device.device_id, address, length),
+            "little",
+            signed=signed,
+        )
+
+    hardware_error = value(70, 1)
+    voltage_raw = value(144, 2)
+    result.update(
+        {
+            "type": "XL330",
+            "baud_register": value(8, 1),
+            "operating_mode": value(11, 1),
+            "temperature_limit_c": value(31, 1),
+            "max_voltage_limit_v": value(32, 2) * 0.1,
+            "min_voltage_limit_v": value(34, 2) * 0.1,
+            "shutdown": value(63, 1),
+            "torque_enable": value(64, 1),
+            "led": value(65, 1),
+            "hardware_error": hardware_error,
+            "hardware_error_names": hardware_error_names(hardware_error),
+            "moving": value(122, 1),
+            "present_pwm": value(124, 2, signed=True),
+            "present_current": value(126, 2, signed=True),
+            "present_velocity": value(128, 4, signed=True),
+            "present_position": value(132, 4),
+            "present_input_voltage_v": voltage_raw * 0.1,
+            "present_temperature_c": value(146, 1),
+        }
+    )
+    return result
 
 
 def configure_servo(
@@ -513,7 +711,9 @@ def command_scan(args: argparse.Namespace) -> int:
                     for device in devices:
                         print(
                             f"FOUND baud={device.baud} id={device.device_id} "
-                            f"model={device.model} firmware={device.firmware}",
+                            f"model={device.model} firmware={device.firmware} "
+                            f"status_error=0x{device.status_error:02x} "
+                            f"alert={bool(device.status_error & DXL_ALERT_BIT)}",
                             flush=True,
                         )
                 else:
@@ -528,6 +728,161 @@ def command_scan(args: argparse.Namespace) -> int:
             encoding="utf-8",
         )
     print(f"TOTAL_EXTERNAL_RESPONDERS={len(found)}")
+    return 0
+
+
+def command_check(args: argparse.Namespace) -> int:
+    report: dict[str, object] = {
+        "port": args.port,
+        "softbus_baud": args.debug_baud,
+    }
+    warnings: list[str] = []
+    external: list[dict[str, object]] = []
+    original_baud: int | None = None
+    with SoftBus(args.port, args.debug_baud, args.timeout) as bus:
+        original = read_board_diagnostics(bus, args.internal_id)
+        original_baud = original.baud
+        imu = inspect_imu(bus, args.internal_id, args.samples, args.interval)
+        report["imu"] = imu
+        before = imu["diagnostics_before"]
+        after = imu["diagnostics_after"]
+        summary = imu["summary"]
+        registers = imu["imu_init_registers"]
+        assert isinstance(before, dict) and isinstance(after, dict)
+        assert isinstance(summary, dict) and isinstance(registers, dict)
+        print(
+            f"IMU id={args.internal_id} firmware=0x{int(before['firmware']):04x} "
+            f"baud={before['baud']} status=0x{int(after['status_flags']):04x} "
+            f"flags={firmware_status_names(int(after['status_flags']))} "
+            f"last_error={after['last_error']}"
+        )
+        print(
+            f"IMU_SAMPLES count={summary['samples_requested']} "
+            f"unique={summary['unique_wire_samples']} "
+            f"quaternion_valid={summary['valid_quaternion_samples']} "
+            f"rate_hz={float(summary['observed_sample_rate_hz']):.1f} "
+            f"max_age_us={summary['max_sample_age_us']}"
+        )
+        print(
+            "IMU_GYRO_DPS mean="
+            + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_mean"])
+            + " min="
+            + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_min"])
+            + " max="
+            + ",".join(f"{float(value):+.4f}" for value in summary["gyro_dps_max"])
+        )
+        if args.show_samples:
+            for sample in imu["samples"]:
+                assert isinstance(sample, dict)
+                print(
+                    f"IMU_SAMPLE index={sample['index']} "
+                    f"gyro_dps={sample['gyro_dps']} "
+                    f"quat_xyz={sample['quaternion_xyz']} "
+                    f"quat_w={sample['quaternion_w_positive']}"
+                )
+
+        if (int(after["status_flags"]) & 0x03) != 0x03:
+            warnings.append(f"IMU not ready/valid: status=0x{int(after['status_flags']):04x}")
+        if int(after["status_flags"]) & 0x7C:
+            warnings.append(
+                f"firmware diagnostic warning: status=0x{int(after['status_flags']):04x} "
+                f"{firmware_status_names(int(after['status_flags']))}"
+            )
+        if int(after["last_error"]) != 0:
+            warnings.append(f"firmware last_error={after['last_error']}")
+        if int(summary["valid_quaternion_samples"]) != args.samples:
+            warnings.append("one or more IMU quaternion samples were invalid")
+        expected_registers = {
+            "who_am_i": 0x70,
+            "ctrl1_xl": 0x07,
+            "ctrl2_g": 0x07,
+            "sflp_odr": 0x63,
+        }
+        for name, expected in expected_registers.items():
+            if int(registers[name]) != expected:
+                warnings.append(
+                    f"IMU register {name}=0x{int(registers[name]):02x}, "
+                    f"expected 0x{expected:02x}"
+                )
+
+        bauds = args.bauds or [original_baud]
+        try:
+            for baud in bauds:
+                set_board_bus_baud(bus, args.internal_id, baud)
+                print(f"BUS_BAUD={baud} VERIFIED", flush=True)
+                devices = scan_at_baud(
+                    bus,
+                    baud,
+                    args.ids,
+                    args.internal_id,
+                    args.retries,
+                    args.scan_timeout,
+                )
+                if not devices:
+                    print(f"BUS_BAUD={baud} NO_EXTERNAL_RESPONDERS", flush=True)
+                for device in devices:
+                    detail = inspect_external_device(bus, device)
+                    external.append(detail)
+                    print(
+                        f"DEVICE baud={baud} id={device.device_id} "
+                        f"model={device.model} firmware={device.firmware} "
+                        f"alert={detail['alert']}"
+                    )
+                    if detail.get("type") == "XL330":
+                        print(
+                            f"XL330 id={device.device_id} "
+                            f"voltage_v={float(detail['present_input_voltage_v']):.1f} "
+                            f"temperature_c={detail['present_temperature_c']} "
+                            f"torque={detail['torque_enable']} "
+                            f"hardware_error=0x{int(detail['hardware_error']):02x} "
+                            f"errors={detail['hardware_error_names']}"
+                        )
+                        if int(detail["hardware_error"]) != 0:
+                            warnings.append(
+                                f"device {device.device_id} hardware_error="
+                                f"0x{int(detail['hardware_error']):02x} "
+                                f"{detail['hardware_error_names']}"
+                            )
+                        voltage = float(detail["present_input_voltage_v"])
+                        if voltage < 3.7 or voltage > 6.0:
+                            warnings.append(
+                                f"device {device.device_id} XL330 voltage {voltage:.1f} V "
+                                "is outside 3.7..6.0 V"
+                            )
+                        if (
+                            int(detail["hardware_error"]) & 0x01
+                            and not (int(detail["shutdown"]) & 0x01)
+                        ):
+                            warnings.append(
+                                f"device {device.device_id} input-voltage shutdown "
+                                f"protection is disabled: Shutdown=0x{int(detail['shutdown']):02x}"
+                            )
+                        if int(detail["torque_enable"]) and not 3.7 <= voltage <= 6.0:
+                            warnings.append(
+                                f"device {device.device_id} torque is enabled while "
+                                f"voltage is {voltage:.1f} V"
+                            )
+        finally:
+            if original_baud is not None:
+                set_board_bus_baud(bus, args.internal_id, original_baud)
+                print(f"FINAL_BUS_BAUD={original_baud} RESTORED", flush=True)
+        report["final_board_diagnostics"] = asdict(
+            read_board_diagnostics(bus, args.internal_id)
+        )
+    report["external_devices"] = external
+    report["warnings"] = warnings
+    if args.json_out:
+        Path(args.json_out).write_text(
+            json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    print(f"TOTAL_EXTERNAL_RESPONDERS={len(external)}")
+    if warnings:
+        for warning in warnings:
+            print(f"WARNING: {warning}")
+        print(f"CHECK_WARNINGS={len(warnings)}")
+    else:
+        print("CHECK_OK")
     return 0
 
 
@@ -591,6 +946,13 @@ def command_self_test(_: argparse.Namespace) -> int:
     assert servo_baud_register(57_600) == 1
     assert servo_baud_register(1_000_000) == 3
     assert parse_id_spec("1,2,10-12") == [1, 2, 10, 11, 12]
+    assert half_to_float(0x3C00) == 1.0
+    assert hardware_error_names(0x35) == [
+        "input_voltage",
+        "overheating",
+        "electrical_shock_or_power",
+        "overload",
+    ]
     print("SELF_TEST_OK")
     return 0
 
@@ -599,9 +961,16 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--port",
         required=True,
-        help="DEBUG UART port, for example COM5 or /dev/ttyUSB0",
+        help="USART2 PA2/PA3 soft-bus port, for example COM5 or /dev/ttyUSB0",
     )
-    parser.add_argument("--debug-baud", type=parse_int, default=1_000_000)
+    parser.add_argument(
+        "--softbus-baud",
+        "--debug-baud",
+        dest="debug_baud",
+        type=parse_int,
+        default=1_000_000,
+        help="soft-bus UART baud (default: 1000000); --debug-baud is an alias",
+    )
     parser.add_argument("--internal-id", type=parse_int, default=INTERNAL_ID_DEFAULT)
     parser.add_argument("--timeout", type=float, default=0.08)
 
@@ -618,6 +987,26 @@ def build_argument_parser() -> argparse.ArgumentParser:
     scan.add_argument("--scan-timeout", type=float, default=0.025)
     scan.add_argument("--json-out")
     scan.set_defaults(handler=command_scan)
+
+    check = subparsers.add_parser(
+        "check", help="check internal IMU, scan the bus, and inspect servos"
+    )
+    add_common_arguments(check)
+    check.add_argument(
+        "--bauds",
+        type=parse_int,
+        nargs="*",
+        choices=BOARD_BAUDS,
+        help="real-bus bauds to scan; omission checks the current baud only",
+    )
+    check.add_argument("--ids", type=parse_id_spec, default=parse_id_spec("0-253"))
+    check.add_argument("--retries", type=int, default=3)
+    check.add_argument("--scan-timeout", type=float, default=0.025)
+    check.add_argument("--samples", type=positive_int, default=20)
+    check.add_argument("--interval", type=nonnegative_float, default=0.05)
+    check.add_argument("--show-samples", action="store_true")
+    check.add_argument("--json-out")
+    check.set_defaults(handler=command_check)
 
     configure = subparsers.add_parser("configure", help="change servo ID/baud")
     add_common_arguments(configure)

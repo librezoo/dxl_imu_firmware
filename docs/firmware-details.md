@@ -11,43 +11,47 @@ The portable core implements the MicroDuck `imu_to_dxl v2` wire contract:
   `SYNC_WRITE`
 - IMU data at address 124, 12 bytes
 - two-slot CRC-protected configuration records
-- diagnostic/control table and a DEBUG UART raw bus bridge; the legacy text
-  maintenance parser remains available as a build option
+- diagnostic/control table, a USART2 raw bus bridge, and a simultaneous
+  USART1 text maintenance port
 
 The `platform/` adapter is intentionally separate from the portable core. It
 is the only layer that should include the WCH CH32V20x headers and provide SPI,
 UART, timer, flash, GPIO and reset hooks.
 
-## DEBUG UART raw bus bridge
+## USART2 raw bus bridge and USART1 maintenance port
 
-The default `0x0208` source configures USART1 on PA9/PA10 for fixed 1 Mbps,
-8N1 raw bytes. USART1 RX uses DMA1 channel 5 and the UART IDLE condition to
+The default `0x0209` source configures USART2 on PA2/PA3 for fixed 1 Mbps,
+8N1 raw bytes. USART2 RX uses DMA1 channel 6 and the UART IDLE condition to
 commit one burst of at most 512 bytes. That burst is transmitted unchanged by
 USART3 using DMA1 channel 2 and the existing PA15 half-duplex direction signal.
 No DXL CRC or instruction validation is performed by the bridge.
 
 USART3's circular RX DMA supplies external bus traffic to both the local DXL
-parser and a 4096-byte USART1 TX queue drained by DMA1 channel 4. A DEBUG burst
+parser and a 4096-byte USART2 TX queue drained by DMA1 channel 7. A soft-bus burst
 is also fed directly to the same local parser after its physical transmission,
 because the target board's RX path does not monitor local TX. This lets the
 internal IMU respond without relying on loopback. Its exact transmitted status
-bytes are queued to DEBUG explicitly. If another hardware revision does return
-the DEBUG request on RX, exact echo matching suppresses it from both the DEBUG
+bytes are queued to USART2 explicitly. If another hardware revision does return
+the injected request on RX, exact echo matching suppresses it from both the USART2
 mirror and duplicate local parsing. All other traffic is mirrored, including
 requests from another controller.
 
+USART1 remains active at 115200, 8N1 on PA9/PA10 and runs the text maintenance
+CLI concurrently with the raw bridge. The two ports no longer require separate
+firmware images.
+
 There is deliberately no multi-controller arbitration, collision recovery,
-retry, or transaction scheduler. The DEBUG controller must wait for the bus
+retry, or transaction scheduler. The soft-bus controller must wait for the bus
 transaction to finish before sending another burst. Byte order is preserved,
 but inter-packet timing is not a capture interface; use a logic analyzer when
 timing evidence is required.
 
-Define `IMU_POWER_DEBUG_CLI=1` to restore the previous USART1 115200 text CLI
-instead of the bridge. `build.ps1 -DebugCli` and the CMake option
-`-DIMU_POWER_DEBUG_CLI=ON` provide equivalent builds.
+`build.ps1 -DebugCli` and the CMake option `-DIMU_POWER_DEBUG_CLI=ON` remain
+accepted for command-line compatibility, but are deprecated no-ops because the
+USART1 CLI is enabled in every build.
 
 The WCH-LinkE serial function supports at most 921600 baud. It can exercise a
-temporary 921600 test build, but validating the default 1 Mbps DEBUG line
+temporary 921600 test build, but validating the default 1 Mbps USART2 soft-bus line
 requires a USB-UART adapter that supports 1 Mbps. See the
 [hardware bridge validation](hardware-softbus-2026-09-17.md).
 
@@ -68,8 +72,6 @@ and Python are not required for this entry point:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
-# Legacy 115200 text CLI instead of the default 1 Mbps raw bridge:
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -DebugCli
 # Override the IDE installation directory when necessary:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -MounRiverRoot 'D:\Tools\MounRiver_Studio2'
 ```
@@ -106,8 +108,8 @@ cmake -S . -B build-ch32-cmake -G 'MinGW Makefiles' -DIMU_POWER_BUILD_CH32=ON `
 cmake --build build-ch32-cmake --target imu_power_ch32 --parallel 2
 ```
 
-Add `-DIMU_POWER_DEBUG_CLI=ON` to the configure command for the legacy CLI
-variant.
+The deprecated `-DIMU_POWER_DEBUG_CLI=ON` option is accepted for compatibility;
+it no longer changes the firmware because the USART1 CLI is always enabled.
 
 ### Firmware layout and host tests
 
