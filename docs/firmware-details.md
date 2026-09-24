@@ -20,7 +20,7 @@ UART, timer, flash, GPIO and reset hooks.
 
 ## USART2 raw bus bridge and USART1 maintenance port
 
-The default `0x0209` source configures USART2 on PA2/PA3 for fixed 1 Mbps,
+The default `0x020A` source configures USART2 on PA2/PA3 for fixed 1 Mbps,
 8N1 raw bytes. USART2 RX uses DMA1 channel 6 and the UART IDLE condition to
 commit one burst of at most 512 bytes. That burst is transmitted unchanged by
 USART3 using DMA1 channel 2 and the existing PA15 half-duplex direction signal.

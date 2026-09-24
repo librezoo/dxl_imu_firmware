@@ -8,22 +8,23 @@ USART2 到真实半双工总线的原始字节桥；USART1 同时保留文本调
 
 | 项目 | 当前值 |
 |---|---|
-| 当前源码版本 | `0x020A`（USART2 软总线，尚未发布） |
-| 最新发布版本 | [`firmware-20260918-0x0209`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260918-0x0209) |
-| 上一发布版本 | [`firmware-20260917-0x0208`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260917-0x0208) |
+| 当前固件版本 | [`firmware-20260924-0x020a`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260924-0x020a) |
+| 上一发布版本 | [`firmware-20260918-0x0209`](https://github.com/cyber-zoo/microduck-imu-power-fw/releases/tag/firmware-20260918-0x0209) |
 | MCU / 晶振 | CH32V203C8U6 / 8 MHz |
 | 内部 IMU | LSM6DSV16X，名义 240 Hz |
 | DXL 默认配置 | Protocol 2.0，ID 200，1 Mbps |
 | 原始软总线 | USART2 PA2/PA3，固定 1 Mbps，8N1 |
 | 文本调试口 | USART1 PA9/PA10，固定 115200，8N1 |
+| 当前发布 BIN | 15,956 字节，SHA-256 `3d132032…023a51e` |
 | 宿主机测试 | 6/6 通过 |
 | 0x0208 实机记录 | IMU 200 + 舵机 1/2，50 Hz，10 分钟，30,000/30,000 通过；舵机 3 四设备冒烟 100/100 通过 |
 | 0x0209 修复验证 | IMU + 15 舵机，50 Hz，30,001/30,001；单 IMU 200 Hz 与混合读取各 12,000/12,000，均零错误 |
 | 0x020A 本地验证 | USART2 内部 IMU READ 300/300、SYNC_READ 100/100；USART1 CLI 与外部 ID 3 转发通过 |
 
-完整实机证据见 [0x0208 DEBUG 软总线验证](docs/hardware-softbus-2026-09-17.md)。
-0x0209 的原因定位和修复验证见 [DEBUG RX 空闲电平修复](docs/debug-rx-idle-fix-2026-09-18.md)。
 0x020A 的 USART2 迁移、烧录读回和串口验证见 [累计验证记录](docs/validation.md)。
+0x0209 的原因定位和长稳验证见
+[DEBUG RX 空闲电平修复](docs/debug-rx-idle-fix-2026-09-18.md)；更早的软总线记录见
+[0x0208 DEBUG 软总线验证](docs/hardware-softbus-2026-09-17.md)。
 
 ## 快速开始
 
@@ -298,13 +299,13 @@ CMake 仍接受 `-DIMU_POWER_DEBUG_CLI=ON`，并提示该选项已弃用。
 
 - Protocol 2.0 CRC、字节填充、坏帧恢复、DMA 环形边界和 softbus 队列：宿主机
   6/6 测试通过。
-- 0x0209 的 PowerShell、CMake 和旧 `-DebugCli` 兼容入口生成相同 BIN：15,952
-  字节，SHA-256 `d7319cc1a7115d8f450a4489a0f654080e656e645c42fe44eb294f6816f115b4`。
-- 0x0209 已烧录且完整读回一致；PA2/PA3 软总线完成普通 READ 300/300 和
+- 0x020A 的 PowerShell、CMake 和旧 `-DebugCli` 兼容入口生成相同 BIN：15,956
+  字节，SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`。
+- 0x020A 已烧录且完整读回一致；PA2/PA3 软总线完成普通 READ 300/300 和
   SYNC_READ 100/100，PA9/PA10 CLI 的四项只读命令均通过。
-- 外接 XL330-M288 后，0x0209 经 COM16 在 1 Mbps 找到 ID 3（型号 1200、固件
+- 外接 XL330-M288 后，0x020A 经 COM16 在 1 Mbps 找到 ID 3（型号 1200、固件
   53），并完整读取控制表状态，确认 USART2→USART3→外部设备回复链路可用。
-- 综合 `check` 实测 IMU 20/20 样本及四元数有效、约 244.4 Hz，同时识别 ID 3
+- 综合 `check` 实测 IMU 20/20 样本及四元数有效、约 251.7 Hz，同时识别 ID 3
   的 `0x80` Alert、输入电压错误和保护/扭矩状态，扫描不会再被 Alert 中止。
 - 已发布 0x0208 镜像烧录后完整读回一致，内部 IMU ready，样本约 247.7 Hz。
 - 两台 XL330-M288 已验证 ID 1/2、1 Mbps；安全控制表访问 142/142 通过。
@@ -313,7 +314,7 @@ CMake 仍接受 `-DIMU_POWER_DEBUG_CLI=ON`，并提示该选项已弃用。
 - 第三台 XL330-M288 已配置为 ID 3、1 Mbps；
   `SYNC_READ(124,12,[200,1,2,3])` 50 Hz 冒烟测试 100/100 成功。
 
-尚未覆盖：0x0209 多外设长稳、真实断电持久化、IMU 物理断连恢复、看门狗
+尚未覆盖：0x020A 多外设长稳、真实断电持久化、IMU 物理断连恢复、看门狗
 强制复位和硬件异常帧注入。
 
 ## 仓库结构

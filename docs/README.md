@@ -21,15 +21,16 @@
 
 ## 发布记录
 
+- [firmware-20260924-0x020a / USART2 软总线与统一诊断](releases/firmware-20260924-0x020a.md)
 - [firmware-20260918-0x0209 / DEBUG RX 空闲上拉修复](releases/firmware-20260918-0x0209.md)
 - [0x0209 请求回流修复验证](debug-rx-idle-fix-2026-09-18.md)
 - [firmware-20260917-0x0208 / DEBUG 软总线](releases/firmware-20260917-0x0208.md)
 - [firmware-20260917 / 0x0207](releases/firmware-20260917.md)
 - [firmware-20260916 / 0x0206](releases/firmware-20260916.md)
 
-当前源码诊断版本为尚未发布的 `0x020A`；最新发布版本为
-`firmware-20260918-0x0209`。0x020A 将软总线迁移到 USART2 PA2/PA3，并让
-USART1 PA9/PA10 的 115200 文本 CLI 默认常开。
+当前源码和最新发布版本均为 `firmware-20260924-0x020a`。本版将软总线迁移到
+USART2 PA2/PA3，让 USART1 PA9/PA10 的 115200 文本 CLI 默认常开，并统一
+IMU、舵机和扫描诊断工具的显著 PASS/WARN/FAIL 输出。
 
 ## 历史背景
 
