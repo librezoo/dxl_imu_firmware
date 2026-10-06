@@ -20,7 +20,7 @@ USB-UART to that bus.
 
 | | |
 |---|---|
-| Source version | `0x020B` (unreleased); last release `0x020A` (tag `firmware-20260924-0x020a`) |
+| Version | `0x020B` (tag `firmware-20261006-0x020b`); previous release `0x020A` |
 | MCU / IMU | CH32V203C8U6 (8 MHz crystal) / LSM6DSV16X |
 | Defaults | ID 200, 1,000,000 bps; ±500 dps, ±2 g, 240 Hz |
 | Soft bus | USART2, PA2 (TX) / PA3 (RX), 1,000,000 bps 8N1 |
@@ -50,8 +50,8 @@ On macOS or Linux, the [xPack](https://github.com/xpack-dev-tools/riscv-none-elf
 scripts/build-xpack.sh        # output in build-xpack/
 ```
 
-The xPack build is not the reference toolchain. Firmware 0x020B was verified on hardware with it; releases are
-built with the MounRiver compiler.
+The xPack build is not the reference toolchain. Firmware 0x020B was verified on hardware with it and the 0x020B
+release is built with it; releases up to 0x020A were built with the MounRiver compiler.
 
 Host tests (C99 compiler and CMake 3.16 or newer; no MCU toolchain):
 

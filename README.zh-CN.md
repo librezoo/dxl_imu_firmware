@@ -19,7 +19,7 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 
 | | |
 |---|---|
-| 源码版本 | `0x020B`（未发布）；最近发布 `0x020A`（标签 `firmware-20260924-0x020a`） |
+| 版本 | `0x020B`（标签 `firmware-20261006-0x020b`）；上一发布 `0x020A` |
 | MCU / IMU | CH32V203C8U6（8 MHz 晶振）/ LSM6DSV16X |
 | 默认值 | ID 200，1,000,000 bps；±500 dps、±2 g、240 Hz |
 | 软总线 | USART2，PA2（TX）/ PA3（RX），1,000,000 bps 8N1 |
@@ -49,7 +49,8 @@ macOS 或 Linux 上，用 [xPack](https://github.com/xpack-dev-tools/riscv-none-
 scripts/build-xpack.sh        # 产物在 build-xpack/
 ```
 
-xPack 构建不是基准工具链：0x020B 固件用它在硬件上验证过；发布版本使用 MounRiver 编译器构建。
+xPack 构建不是基准工具链：0x020B 固件用它在硬件上验证过，0x020B 发布版也由它构建；0x020A 及以前的发布版使用
+MounRiver 编译器构建。
 
 宿主机测试（C99 编译器和 CMake 3.16 及以上，不需要 MCU 工具链）：
 

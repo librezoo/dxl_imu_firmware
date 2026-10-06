@@ -27,7 +27,8 @@ adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitab
 
 ## 0x020B
 
-Build: xPack `riscv-none-elf-gcc` 12.5.0 (not the official WCH GCC 8.2), 16,644 bytes. Host tests 7/7 with
+Build: xPack `riscv-none-elf-gcc` 12.5.0 (not the official WCH GCC 8.2), 16,644 bytes, SHA-256
+`69e4eb55aea68198e5ce21b4e178d5b719da7bfb5e1e05748423d3ea2f0c06d7`. Host tests 7/7 with
 assertions enabled and `-Wall -Wextra` free of warnings. One CH32V203C8U6 board, reached through the DXL bus
 by a `dxl_debugger_firmware` bridge.
 

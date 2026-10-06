@@ -3,7 +3,7 @@
 Firmware versions are reported in the diagnostics block (address 160). Test results are in
 [docs/validation.md](docs/validation.md).
 
-## 0x020B — unreleased
+## 0x020B — 2026-10-06
 
 - Gyro range, accelerometer range, sensor rate and SFLP rate are configurable over the bus (addresses 224–227,
   running values at 232–235) and stored in flash. Defaults are unchanged: ±500 dps, ±2 g, 240 Hz.
@@ -12,6 +12,8 @@ Firmware versions are reported in the diagnostics block (address 160). Test resu
 - Fix: `LOAD_DEFAULTS` now discards earlier staged writes.
 - Build option `IMU_POWER_DEFAULT_ID` sets the factory ID at compile time (default 200).
 - `scripts/build-xpack.sh` builds with the xPack toolchain on macOS/Linux.
+- Built with xPack `riscv-none-elf-gcc` 12.5.0 (earlier releases: MounRiver WCH GCC 8.2.0). BIN 16,644 bytes,
+  SHA-256 `69e4eb55aea68198e5ce21b4e178d5b719da7bfb5e1e05748423d3ea2f0c06d7`.
 
 ## 0x020A — 2026-09-24
 
