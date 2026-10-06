@@ -8,6 +8,11 @@
 - [0x0208 DEBUG 软总线实机验证](hardware-softbus-2026-09-17.md)：烧录、回显
   修复、1 Mbps DEBUG、舵机扫描/配置、控制表访问和 30,000 周期长稳测试。
 
+## 设计稿
+
+- [总线 OTA 方案](ota-design.md)：A/B 双槽、bootloader、DXL 控制表协议和防砖策略；
+  仅设计，未实现。
+
 ## 专项调查
 
 - [UART 与合并读取恢复](uart-recovery-2026-09-16.md)：DMA 环形索引、坏帧恢复、
