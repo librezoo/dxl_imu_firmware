@@ -1,5 +1,8 @@
 # Third-party material
 
+This repository is licensed under the Apache License 2.0 ([LICENSE](LICENSE)), except for the third-party files below,
+which keep their own notices.
+
 - **Pollen Robotics Microduck.** Parts of this firmware derive from the Microduck project at commit
   `590b986bd8c0d50ae02cb3ea2f59c463b6828168`. The corresponding licence (Apache-2.0) is kept in `LICENSES/`.
 - **WCH CH32V20x EVT SDK** (EVT package 2026.07, standard peripheral library 2.4) is committed in

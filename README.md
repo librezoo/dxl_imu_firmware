@@ -102,3 +102,8 @@ platform/           CH32V203 port              tests/     host tests
 scripts/            xPack build                tools/     soft-bus tool
 vendor/             pinned WCH SDK             docs/      documentation
 ```
+
+## Licence
+
+Apache License 2.0, see [LICENSE](LICENSE). The WCH SDK under `vendor/` and other third-party material keep
+their own notices; see [THIRD_PARTY.md](THIRD_PARTY.md).

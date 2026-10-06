@@ -101,3 +101,8 @@ platform/           CH32V203 适配         tests/    宿主机测试
 scripts/            xPack 构建            tools/    软总线工具
 vendor/             固定版本 WCH SDK      docs/     文档
 ```
+
+## 许可
+
+Apache License 2.0，见 [LICENSE](LICENSE)。`vendor/` 下的 WCH SDK 等第三方内容保留各自的声明，见
+[THIRD_PARTY.md](THIRD_PARTY.md)。
