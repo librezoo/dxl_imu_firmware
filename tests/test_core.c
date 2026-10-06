@@ -126,9 +126,11 @@ int main(void)
     assert(device.sample.gyro_raw[0] == 77);
 
     {
-        imu_power_config_t saved = {42u, 2000000u, 0u};
+        imu_power_config_t saved;
         imu_power_config_t loaded;
         uint32_t generation;
+        imu_power_config_defaults(&saved);
+        saved.device_id = 42u; saved.baudrate = 2000000u;
         assert(imu_power_config_save(&storage, &saved, 0u, &generation));
         assert(generation == 1u);
         assert(imu_power_config_load(&storage, &loaded, &generation));

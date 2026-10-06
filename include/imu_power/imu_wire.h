@@ -17,6 +17,9 @@ typedef struct {
     /* SFLP bias uses fixed 125 dps units even when the gyro uses 500 dps. */
     int16_t gyro_bias_125[3];
     bool bias_valid;
+    /* gyro_raw sensitivity in 4.375 mdps/LSB steps (1,2,4,8,16,32 for
+       125..4000 dps). Zero means the historical 500 dps scale, 4. */
+    uint8_t gyro_ratio;
 } imu_power_sample_t;
 
 typedef struct {
@@ -33,8 +36,8 @@ void imu_power_sample_fifo(imu_power_sample_t *sample, imu_power_sample_clock_t 
 void imu_power_sample_age(imu_power_sample_t *sample, const imu_power_sample_clock_t *clock,
                           uint32_t now_ms);
 
-/* Wire gyro is in 500 dps counts with the on-chip SFLP bias removed when
-   available. gyro_raw and gyro_bias_125 remain separately observable. */
+/* Wire gyro is in counts of the configured gyro full scale (500 dps by
+   default, 17.5 mdps/LSB) with the on-chip SFLP bias removed when available. gyro_raw and gyro_bias_125 remain separately observable. */
 void imu_power_pack_sample(const imu_power_sample_t *sample,
                            uint8_t out[IMU_POWER_DATA_LENGTH]);
 bool imu_power_quaternion_valid(const uint16_t quat_half[3]);

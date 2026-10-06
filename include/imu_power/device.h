@@ -12,6 +12,11 @@
 #define IMU_POWER_DIAG_ADDRESS 160u
 #define IMU_POWER_IMU_CONFIG_ADDRESS 184u
 #define IMU_POWER_CONFIG_ADDRESS 192u
+/* R/W (after unlock): gyro_fs, accel_fs, imu_odr, sflp_odr register codes. */
+#define IMU_POWER_IMU_PARAM_ADDRESS 224u
+#define IMU_POWER_IMU_PARAM_LENGTH 4u
+/* Read-only: the same four values the IMU was actually initialised with. */
+#define IMU_POWER_IMU_RUNTIME_ADDRESS 232u
 #define IMU_POWER_GYRO_DIAG_ADDRESS 208u
 #define IMU_POWER_MAX_READ 64u
 #define IMU_POWER_CONFIG_CMD_SAVE 0x01u
@@ -49,6 +54,10 @@ typedef struct {
     imu_power_config_t active_config;
     uint8_t runtime_id;
     uint32_t runtime_baudrate;
+    uint8_t runtime_gyro_fs;
+    uint8_t runtime_accel_fs;
+    uint8_t runtime_imu_odr;
+    uint8_t runtime_sflp_odr;
     imu_power_config_t staged_config;
     uint32_t config_generation;
     bool staged_valid;

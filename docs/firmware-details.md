@@ -147,3 +147,30 @@ readback. The sample counter advances on fresh SFLP records, and sample age is
 reported rather than reset on every poll. See
 [sensor validation](sensor-validation-2026-09-16.md) for the measured behavior,
 diagnostic fields and remaining validation scope.
+
+## Bus-writable IMU parameters (0x020B)
+
+The persisted configuration (configuration record version 2) carries four IMU
+parameters in addition to the ID and baud rate. They are chip register codes,
+stored and read back unchanged, and take effect at the next boot, exactly like
+ID and baud rate. Defaults reproduce 0x020A: ±500 dps, ±2 g, 240 Hz.
+
+| Address | Name | Values (register code: meaning) |
+|---:|---|---|
+| 224 | `gyro_fs` | 0:125, 1:250, 2:500 (default), 3:1000, 4:2000, 12:4000 dps |
+| 225 | `accel_fs` | 0:±2 g (default), 1:±4 g, 2:±8 g, 3:±16 g |
+| 226 | `imu_odr` | 6:120, 7:240 (default), 8:480 Hz for accelerometer and gyro |
+| 227 | `sflp_odr` | 2:60, 3:120, 4:240 (default), 5:480 Hz |
+| 232..235 | read-only | the four values the IMU was initialised with this boot |
+
+- Reading 224..227 shows the pending value (staged/active); 232..235 shows what
+  is running. Registers 184..191 still show the chip's own CTRL registers.
+- Writes need the existing two-step maintenance unlock (197 ← 0xA5, 0x5A). Each
+  value is range-checked on write. `sflp_odr` must not exceed `imu_odr`; that
+  pair is checked when the configuration is saved, and an invalid pair makes
+  `SAVE` return RESULT_FAIL without storing anything.
+- Sequence: unlock, write 224..227, `197 ← 0x01` (save), `197 ← 0x02` (reboot).
+- The wire gyro (address 124) is in counts of the configured full scale: 17.5
+  mdps/LSB at ±500 dps, 70 mdps/LSB at ±2000 dps, 140 mdps/LSB at ±4000 dps.
+  robotd decodes 17.5 mdps/LSB, so leave `gyro_fs` at 2 for robotd.
+- Version 1 records are upgraded on load; stored ID and baud rate are kept.

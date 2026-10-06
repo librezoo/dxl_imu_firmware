@@ -187,6 +187,7 @@ static bool imu_init(imu_power_device_t *device)
     memset(&device->sample, 0, sizeof(device->sample));
     device->sample.sample_counter = counter;
     device->sample.age_us = UINT32_MAX;
+    device->sample.gyro_ratio = (uint8_t)imu_power_config_gyro_ratio(device->runtime_gyro_fs);
     imu_power_device_set_sample(device, &device->sample);
     who = imu_read_reg(IMU_REG_WHO_AM_I);
     if (who != IMU_WHO_AM_I) return false;
@@ -194,14 +195,18 @@ static bool imu_init(imu_power_device_t *device)
     imu_delay_ms(30u);
     if (imu_read_reg(IMU_REG_WHO_AM_I) != IMU_WHO_AM_I) return false;
     imu_write_reg(IMU_REG_CTRL3_C, 0x44u); /* BDU + IF_INC */
-    imu_write_reg(IMU_REG_CTRL6, 0x02u); /* +/-500 dps: robotd uses 17.5 mdps/LSB */
-    imu_write_reg(IMU_REG_CTRL1_XL, 0x07u); /* 240 Hz, high performance */
-    imu_write_reg(IMU_REG_CTRL2_G, 0x07u); /* 240 Hz, high performance */
+    /* Defaults are +/-500 dps (robotd uses 17.5 mdps/LSB), +/-2 g, 240 Hz;
+       the bus-writable configuration can change them. */
+    imu_write_reg(IMU_REG_CTRL6, device->runtime_gyro_fs);
+    imu_write_reg(IMU_REG_CTRL8, device->runtime_accel_fs);
+    imu_write_reg(IMU_REG_CTRL1_XL, device->runtime_imu_odr); /* high performance */
+    imu_write_reg(IMU_REG_CTRL2_G, device->runtime_imu_odr);
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x80u); /* embedded-function bank */
     imu_write_reg(IMU_REG_EMB_FUNC_FIFO_EN_A, 0x22u); /* game rotation + gyro bias */
     /* SFLP_ODR bits 6,1,0 must stay one (datasheet table 323). Update only
        ODR[5:3]; a whole-byte 0x18 write incorrectly clears the reset bits. */
-    imu_write_reg(IMU_REG_SFLP_ODR, (uint8_t)((imu_read_reg(IMU_REG_SFLP_ODR) & 0xC7u) | 0x20u));
+    imu_write_reg(IMU_REG_SFLP_ODR, (uint8_t)((imu_read_reg(IMU_REG_SFLP_ODR) & 0xC7u) |
+                                              (device->runtime_sflp_odr << 3u)));
     imu_write_reg(IMU_REG_EMB_FUNC_EN_A, 0x02u); /* enable game rotation */
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u); /* main bank */
     imu_write_reg(IMU_REG_FIFO_CTRL1, 0x01u);
@@ -221,12 +226,14 @@ static bool imu_init(imu_power_device_t *device)
     device->diagnostics.imu_registers[7] = imu_read_reg(IMU_REG_SFLP_ODR);
     imu_write_reg(IMU_REG_FUNC_CFG_ACCESS, 0x00u);
     return device->diagnostics.imu_registers[0] == IMU_WHO_AM_I &&
-           device->diagnostics.imu_registers[1] == 0x07u &&
-           device->diagnostics.imu_registers[2] == 0x07u &&
+           device->diagnostics.imu_registers[1] == device->runtime_imu_odr &&
+           device->diagnostics.imu_registers[2] == device->runtime_imu_odr &&
            (device->diagnostics.imu_registers[3] & 0x44u) == 0x44u &&
-           (device->diagnostics.imu_registers[4] & 0x0Fu) == 0x02u &&
+           (device->diagnostics.imu_registers[4] & 0x0Fu) == device->runtime_gyro_fs &&
+           (device->diagnostics.imu_registers[5] & 0x03u) == device->runtime_accel_fs &&
            (device->diagnostics.imu_registers[6] & 0x02u) != 0u &&
-           device->diagnostics.imu_registers[7] == 0x63u;
+           device->diagnostics.imu_registers[7] ==
+               (uint8_t)(0x43u | (device->runtime_sflp_odr << 3u));
 }
 
 static void sample_update(imu_power_device_t *device)

@@ -31,10 +31,12 @@ static int16_t gyro_output_count(const imu_power_sample_t *sample, unsigned axis
 {
     int32_t value = sample->gyro_raw[axis];
     if (sample->bias_valid) {
-        /* The SFLP estimate is always 4.375 mdps/LSB. The wire gyro is
-           17.5 mdps/LSB. Round only after subtraction, preserving real motion. */
-        value = value * 4 - sample->gyro_bias_125[axis];
-        value = (value + (value >= 0 ? 2 : -2)) / 4;
+        /* The SFLP estimate is always 4.375 mdps/LSB. The wire gyro uses the
+           configured full scale, ratio times coarser. Round only after
+           subtraction, preserving real motion. */
+        int32_t ratio = sample->gyro_ratio != 0u ? (int32_t)sample->gyro_ratio : 4;
+        value = value * ratio - sample->gyro_bias_125[axis];
+        value = (value + (value >= 0 ? ratio / 2 : -(ratio / 2))) / ratio;
     }
     if (value > INT16_MAX) value = INT16_MAX;
     if (value < INT16_MIN) value = INT16_MIN;

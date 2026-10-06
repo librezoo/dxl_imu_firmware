@@ -57,7 +57,11 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
     uint8_t sample[IMU_POWER_DATA_LENGTH];
     uint8_t diag[24];
     uint8_t config[7];
+    uint8_t params[IMU_POWER_IMU_PARAM_LENGTH];
+    uint8_t runtime_params[IMU_POWER_IMU_PARAM_LENGTH];
     uint8_t gyro_diag[14];
+    const imu_power_config_t *shown = device->staged_valid ? &device->staged_config
+                                                             : &device->active_config;
     uint16_t i;
     imu_power_pack_sample(&device->sample, sample);
     diag_read(device, diag);
@@ -71,6 +75,10 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
     put_u32(&config[1], device->staged_valid ? device->staged_config.baudrate : device->active_config.baudrate);
     config[5] = 0u;
     config[6] = (uint8_t)device->diagnostics.config_status;
+    params[0] = shown->gyro_fs; params[1] = shown->accel_fs;
+    params[2] = shown->imu_odr; params[3] = shown->sflp_odr;
+    runtime_params[0] = device->runtime_gyro_fs; runtime_params[1] = device->runtime_accel_fs;
+    runtime_params[2] = device->runtime_imu_odr; runtime_params[3] = device->runtime_sflp_odr;
     for (i = 0; i < length; ++i) {
         uint16_t a = (uint16_t)(address + i);
         if (a >= IMU_POWER_DATA_ADDRESS && a < IMU_POWER_DATA_ADDRESS + IMU_POWER_DATA_LENGTH) {
@@ -82,6 +90,12 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
             out[i] = device->diagnostics.imu_registers[a - IMU_POWER_IMU_CONFIG_ADDRESS];
         } else if (a >= IMU_POWER_CONFIG_ADDRESS && a < IMU_POWER_CONFIG_ADDRESS + sizeof(config)) {
             out[i] = config[a - IMU_POWER_CONFIG_ADDRESS];
+        } else if (a >= IMU_POWER_IMU_PARAM_ADDRESS &&
+                   a < IMU_POWER_IMU_PARAM_ADDRESS + IMU_POWER_IMU_PARAM_LENGTH) {
+            out[i] = params[a - IMU_POWER_IMU_PARAM_ADDRESS];
+        } else if (a >= IMU_POWER_IMU_RUNTIME_ADDRESS &&
+                   a < IMU_POWER_IMU_RUNTIME_ADDRESS + IMU_POWER_IMU_PARAM_LENGTH) {
+            out[i] = runtime_params[a - IMU_POWER_IMU_RUNTIME_ADDRESS];
         } else if (a >= IMU_POWER_GYRO_DIAG_ADDRESS && a < IMU_POWER_GYRO_DIAG_ADDRESS + sizeof(gyro_diag)) {
             out[i] = gyro_diag[a - IMU_POWER_GYRO_DIAG_ADDRESS];
         } else if (a >= 136u && a < 160u) {
@@ -95,8 +109,11 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
 
 static bool maintenance_range(uint16_t address, uint16_t length)
 {
-    return length != 0u && address >= IMU_POWER_CONFIG_ADDRESS &&
-           (uint32_t)address + length <= IMU_POWER_CONFIG_ADDRESS + 7u;
+    if (length == 0u) return false;
+    if (address >= IMU_POWER_CONFIG_ADDRESS &&
+        (uint32_t)address + length <= IMU_POWER_CONFIG_ADDRESS + 7u) return true;
+    return address >= IMU_POWER_IMU_PARAM_ADDRESS &&
+           (uint32_t)address + length <= IMU_POWER_IMU_PARAM_ADDRESS + IMU_POWER_IMU_PARAM_LENGTH;
 }
 
 static bool apply_config_bytes(imu_power_config_t *config, uint16_t address,
@@ -104,6 +121,26 @@ static bool apply_config_bytes(imu_power_config_t *config, uint16_t address,
 {
     uint32_t baud;
     if (!maintenance_range(address, length)) return false;
+    if (address >= IMU_POWER_IMU_PARAM_ADDRESS) {
+        uint16_t i;
+        /* Each byte is validated alone. The sflp_odr <= imu_odr relation is
+           checked when the configuration is saved, so a two-step change such
+           as 480 -> 120 Hz never needs an invalid intermediate order. */
+        for (i = 0; i < length; ++i) {
+            uint8_t value = data[i];
+            switch (address + i) {
+            case 224u: if (!imu_power_config_valid_gyro_fs(value)) return false;
+                       config->gyro_fs = value; break;
+            case 225u: if (!imu_power_config_valid_accel_fs(value)) return false;
+                       config->accel_fs = value; break;
+            case 226u: if (!imu_power_config_valid_imu_odr(value)) return false;
+                       config->imu_odr = value; break;
+            default:   if (!imu_power_config_valid_sflp_odr(value)) return false;
+                       config->sflp_odr = value; break;
+            }
+        }
+        return true;
+    }
     if (address == 192u && length >= 1u) {
         if (!imu_power_config_valid_id(data[0])) return false;
         config->device_id = data[0];
@@ -143,7 +180,11 @@ void imu_power_device_init(imu_power_device_t *device,
     device->config_generation = generation;
     device->runtime_id = device->active_config.device_id;
     device->runtime_baudrate = device->active_config.baudrate;
-    device->diagnostics.firmware_version = 0x020Au;
+    device->runtime_gyro_fs = device->active_config.gyro_fs;
+    device->runtime_accel_fs = device->active_config.accel_fs;
+    device->runtime_imu_odr = device->active_config.imu_odr;
+    device->runtime_sflp_odr = device->active_config.sflp_odr;
+    device->diagnostics.firmware_version = 0x020Bu;
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }
@@ -224,6 +265,7 @@ size_t imu_power_device_handle(imu_power_device_t *device,
                 device->diagnostics.config_status = 0u;
             } else if (command == IMU_POWER_CONFIG_CMD_LOAD_DEFAULTS) {
                 imu_power_config_defaults(&device->active_config);
+                device->staged_valid = false; /* drop writes made before the reset */
                 device->diagnostics.config_status = 2u;
             } else if (command == IMU_POWER_CONFIG_CMD_REBOOT) {
                 device->reboot_requested = true;
@@ -254,6 +296,7 @@ size_t imu_power_device_handle(imu_power_device_t *device,
                 }
             } else if (device->staged_command == IMU_POWER_CONFIG_CMD_LOAD_DEFAULTS) {
                 imu_power_config_defaults(&device->active_config);
+                device->staged_valid = false; /* drop writes made before the reset */
                 device->diagnostics.config_status = 2u;
             } else if (device->staged_command == IMU_POWER_CONFIG_CMD_REBOOT) {
                 device->reboot_requested = true;
