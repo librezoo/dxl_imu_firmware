@@ -2,9 +2,13 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![MCU: CH32V203C8U6](https://img.shields.io/badge/MCU-CH32V203C8U6-informational?style=flat-square) ![IMU: LSM6DSV16X](https://img.shields.io/badge/IMU-LSM6DSV16X-informational?style=flat-square) ![protocol: Dynamixel 2.0](https://img.shields.io/badge/protocol-Dynamixel_2.0-orange?style=flat-square) ![language: C99](https://img.shields.io/badge/language-C99-lightgrey?style=flat-square)
+
 Firmware for the DXL IMU/power board: a WCH CH32V203C8U6 with an ST LSM6DSV16X IMU, speaking Dynamixel
 Protocol 2.0. It reports gyro rates and an on-chip sensor-fusion attitude on a Dynamixel bus, and bridges a
 USB-UART to that bus.
+
+<p align="center"><img src="docs/images/board.png" alt="DXL IMU board with the sensor frame (X, Y, Z) drawn at U3" width="720"></p>
 
 ## Features
 
@@ -17,6 +21,8 @@ USB-UART to that bus.
 - 115,200 bps text maintenance port on USART1, active at the same time.
 
 ## Status
+
+<p align="center"><img src="docs/images/architecture.svg" alt="System overview: host, soft bus, DXL bus, IMU" width="860"></p>
 
 | | |
 |---|---|

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ff4f1f"/></marker>
+  </defs>
+  <rect width="960" height="400" rx="14" fill="#f4f2ee"/>
+  <g stroke="#15161a" stroke-width="1.5" fill="#fff">
+    <rect x="30" y="90" width="150" height="90" rx="6"/>
+    <rect x="30" y="250" width="150" height="70" rx="6"/>
+    <rect x="270" y="50" width="420" height="300" rx="8" fill="#15161a"/>
+    <rect x="790" y="90" width="140" height="90" rx="6"/>
+    <rect x="790" y="230" width="140" height="90" rx="6"/>
+  </g>
+  <g fill="#15161a" text-anchor="middle">
+    <text x="105" y="128" font-weight="700">Host PC</text><text x="105" y="150">mdimu / Python</text><text x="105" y="168" fill="#666">USB-UART, 1 Mbps</text>
+    <text x="105" y="283" font-weight="700">Terminal</text><text x="105" y="303" fill="#666">115,200 bps CLI</text>
+    <text x="860" y="128" font-weight="700">DXL bus</text><text x="860" y="150">servos, other</text><text x="860" y="168">IMU boards</text>
+    <text x="860" y="268" font-weight="700">LSM6DSV16X</text><text x="860" y="290">gyro · accel</text><text x="860" y="308" fill="#666">SPI1 · SFLP</text>
+  </g>
+  <text x="480" y="82" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">CH32V203C8U6</text>
+  <g stroke="#fff" stroke-width="1.2" fill="none">
+    <rect x="295" y="110" width="150" height="60" rx="4"/><rect x="515" y="110" width="150" height="60" rx="4"/>
+    <rect x="295" y="215" width="150" height="50" rx="4"/><rect x="515" y="215" width="150" height="50" rx="4"/>
+    <rect x="295" y="290" width="150" height="40" rx="4"/>
+  </g>
+  <g fill="#fff" text-anchor="middle">
+    <text x="370" y="135">USART2</text><text x="370" y="155" fill="#aaa">PA2 / PA3</text>
+    <text x="590" y="135">USART3</text><text x="590" y="155" fill="#aaa">PB10/11 · PA15</text>
+    <text x="370" y="236">DXL parser</text><text x="370" y="254" fill="#aaa">ID 200 · table</text>
+    <text x="590" y="236">IMU driver</text><text x="590" y="254" fill="#aaa">FIFO · bias</text>
+    <text x="370" y="315">USART1 CLI</text>
+  </g>
+  <g stroke="#ff4f1f" stroke-width="2" fill="none" marker-end="url(#a)" marker-start="url(#a)">
+    <path d="M180 135H295"/><path d="M445 140H515"/><path d="M665 140H790"/>
+    <path d="M370 170V215" stroke-dasharray="5 4"/><path d="M445 240H515"/><path d="M665 240H790" stroke-width="2"/>
+    <path d="M180 285H260V310H295"/>
+  </g>
+  <g fill="#ff4f1f" text-anchor="middle" font-size="11">
+    <text x="237" y="127">raw bridge</text><text x="480" y="132">bursts</text><text x="727" y="132">half-duplex</text>
+  </g>
+</svg>

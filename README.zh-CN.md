@@ -2,8 +2,12 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
+![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![MCU: CH32V203C8U6](https://img.shields.io/badge/MCU-CH32V203C8U6-informational?style=flat-square) ![IMU: LSM6DSV16X](https://img.shields.io/badge/IMU-LSM6DSV16X-informational?style=flat-square) ![protocol: Dynamixel 2.0](https://img.shields.io/badge/protocol-Dynamixel_2.0-orange?style=flat-square) ![language: C99](https://img.shields.io/badge/language-C99-lightgrey?style=flat-square)
+
 DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynamixel Protocol 2.0。它在 Dynamixel
 总线上输出陀螺仪角速度和片上传感器融合得到的姿态，并把一路 USB-UART 桥接到该总线。
+
+<p align="center"><img src="docs/images/board.png" alt="DXL IMU 板与 U3 处的传感器坐标系（X、Y、Z）" width="720"></p>
 
 ## 功能
 
@@ -16,6 +20,8 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 - USART1 提供 115,200 bps 文本维护口，与软总线同时工作。
 
 ## 状态
+
+<p align="center"><img src="docs/images/architecture.svg" alt="系统概览：上位机、软总线、DXL 总线、IMU" width="860"></p>
 
 | | |
 |---|---|
