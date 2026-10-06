@@ -1,121 +1,83 @@
-# 总线 OTA 方案（设计稿）
+# Proposal: firmware update over the DXL bus
 
-状态：仅设计，尚未实现。目标：不拆机、不接 WCH-Link，直接通过机器人现有的
-1 Mbps Dynamixel 总线（或 USART2 软总线）升级 IMU/电源板固件，且任何一步失败
-都不会把板子变砖。
+**Status: design only; not implemented.** Goal: update the firmware through the existing 1 Mbps DXL bus (or the
+soft bus) without opening the robot or attaching a WCH-Link, and without a failed update ever leaving the board
+unrecoverable.
 
-## 1. 约束
+## Constraints
 
-| 项目 | 数值 |
-|---|---|
-| MCU | CH32V203C8U6，Flash 64 KiB，RAM 20 KiB |
-| 现有应用 | 约 16.6 KiB（0x020B），链接区限定 56 KiB |
-| 配置页 | 末尾两个 4 KiB（0x0800E000 / 0x0800F000），双槽，保持不动 |
-| 总线 | USART3 真实 DXL 总线（ID/波特率取自配置）；USART2 软总线固定 1 Mbps |
-| 现状 | 无 bootloader，无写 Flash 的总线入口；唯一烧录方式是 SWD |
+- CH32V203C8U6: 64 KiB flash, 20 KiB RAM. The application is currently about 16.6 KiB (limit 56 KiB).
+- The last two 4 KiB pages hold the configuration and must keep their address and format.
+- There is no bootloader today; the only way to program the chip is SWD.
 
-## 2. Flash 布局（推荐：A/B 双槽）
+## Layout (recommended: A/B slots)
 
-```text
-0x08000000  Bootloader      8 KiB   写保护（WRP），OTA 永远不改它
-0x08002000  Slot A         24 KiB   应用镜像，链接到本槽地址
-0x08008000  Slot B         24 KiB   应用镜像，链接到本槽地址
-0x0800E000  Config         8 KiB    现有双槽配置，地址与格式不变
-```
+| Address | Size | Content |
+|---:|---:|---|
+| `0x08000000` | 8 KiB | Bootloader, write-protected with the option-byte WRP; never changed by an update |
+| `0x08002000` | 24 KiB | Slot A application |
+| `0x08008000` | 24 KiB | Slot B application |
+| `0x0800E000` | 8 KiB | Configuration (unchanged) |
 
-- 应用现在 16.6 KiB，24 KiB 槽余量约 30%。若以后超出，改为单槽方案（见 §8）。
-- 每个槽的镜像必须按各自地址链接，所以构建要出 `app-A.bin` 和 `app-B.bin` 两个文件，
-  两者源码相同、只有链接起点不同。上位机根据当前运行槽，把另一个槽的镜像推下去。
-- 镜像开头 64 字节为头部：`magic`、`header_version`、`slot`、`image_size`、
-  `image_crc32`、`fw_version`、`hw_id`（CH32V203 + LSM6DSV16X 板）、`min_boot_version`、
-  `header_crc32`。头部不通过，该槽视为空。
+Each slot is linked for its own address, so a release contains `app-A.bin` and `app-B.bin` built from the same
+sources. A 64-byte header starts every image: magic, header version, slot, image size, image CRC-32, firmware
+version, hardware ID, minimum bootloader version, header CRC-32. An invalid header means an empty slot.
 
-## 3. 启动流程
+If the application outgrows 24 KiB, use one 48 KiB slot with a resident bootloader instead: an interrupted update
+then leaves the bootloader waiting for a new image, but there is no older version to fall back to.
 
-```text
-复位 -> bootloader
-  1. 读 BKP 备份寄存器里的启动标志（应用请求 "进入升级"）和试运行计数
-  2. 校验槽头部与整包 CRC32，挑选 "已确认" 的槽；没有就选序号更新的有效槽
-  3. 请求升级、或没有任何有效槽 -> 留在 bootloader 升级模式（总线上常驻，LED/状态可读）
-  4. 否则关闭外设中断，跳转到槽起点（应用自己设置 mtvec 与 HPE，现有启动代码已处理）
-```
+## Boot flow
 
-- **试运行（trial boot）**：新镜像 COMMIT 后第一次启动标记为 *未确认*，试运行计数 +1。
-  应用在 IMU 初始化成功、并在总线上回复过一次 PING/READ 后，才写 "确认" 标志。
-  连续 3 次启动未确认，bootloader 自动回到另一个槽（旧版本仍完好）。
-- **看门狗**：应用已启用 IWDG；bootloader 升级模式也要喂狗，避免长时间擦写时被复位。
-- **上电窗口**：bootloader 在 ~200 ms 内监听一次 "停留" 命令，用于应用死循环但头部有效时
-  仍可强制进入升级模式。
+1. The bootloader reads the backup-register flags, validates both slots (header and CRC-32) and picks the
+   confirmed slot, otherwise the newer valid one.
+2. If an update was requested, or no slot is valid, it stays in update mode on the bus (same ID and baud rate).
+3. Otherwise it stops its peripherals and jumps to the slot; the application sets up `mtvec` and the hardware
+   interrupt stack itself, as it does today.
 
-## 4. 总线协议
+A new image is first started as *unconfirmed*. The application confirms it after the IMU initialises and the board
+has answered one bus request. After three unconfirmed starts the bootloader returns to the other slot.
 
-沿用 DXL 2.0 帧与 CRC，不新增指令，用一段独立的控制表地址，任何 DXL 主机（包括
-Wizard 的手动包、rustypot、`dxl_softbus_tool`）都能发。应用和 bootloader 都实现
-**状态区**，只有 bootloader 实现 **数据区**。
+## Protocol
 
-| 地址 | 大小 | 访问 | 含义 |
+Dynamixel 2.0 frames with the existing CRC; no new instruction. A separate register window is used by both the
+application (status only) and the bootloader.
+
+| Address | Size | Access | Contents |
 |---:|---:|---|---|
-| 0x0300 | 32 | 读 | OTA 状态：模式（0 应用 / 1 bootloader）、bootloader 版本、当前槽、两个槽的版本和有效位、待写偏移、最近错误、最大块长 |
-| 0x0320 | 1 | 写 | 命令：`0xA5`/`0x5A` 两步解锁（沿用现有维护解锁序列）、`ENTER_BOOT`、`BEGIN`、`END`、`COMMIT`、`ABORT` |
-| 0x0328 | 16 | 写 | `BEGIN` 参数：目标槽、镜像大小、镜像 CRC32、版本 |
-| 0x0400 | 4+N | 写 | 数据块：前 4 字节为偏移，后面 N ≤ 128 字节为载荷 |
+| `0x0300` | 32 | R | Mode (application/bootloader), versions, running slot, slot validity, next expected offset, last error, maximum chunk |
+| `0x0320` | 1 | W | Command: unlock (`0xA5`, `0x5A`), `ENTER_BOOT`, `BEGIN`, `END`, `COMMIT`, `ABORT` |
+| `0x0328` | 16 | W | `BEGIN` arguments: target slot, size, CRC-32, version |
+| `0x0400` | 4 + N | W | Data chunk: offset, then at most 128 bytes |
 
-流程：
+Sequence: read the status; unlock and `ENTER_BOOT` (the application resets into the bootloader); `BEGIN` erases the
+target slot page by page; write chunks (an out-of-order offset is refused with the expected offset, a repeated chunk
+is harmless); `END` checks the CRC-32 and header; `COMMIT` marks the slot for a trial start and resets.
 
-1. 主机读 0x0300 确认型号、当前槽、`min_boot_version`；
-2. 解锁并发 `ENTER_BOOT`，应用写 BKP 标志后复位，bootloader 接管（总线 ID/波特率不变）；
-3. `BEGIN(slot, size, crc32, version)`：bootloader 擦除目标槽（4 KiB 页，逐页回 ACK，
-   主机按页等待）；
-4. 循环写数据块；偏移必须等于 "待写偏移"，否则回 `DATA_RANGE` 并给出期望偏移，
-   主机据此重发（重复块幂等）。每个块的完整性由 DXL 包 CRC16 保证；
-5. `END`：bootloader 对整槽算 CRC32、核对头部，通过后把头部标记写入；
-6. `COMMIT`：设置 "待试运行" 并复位。失败路径一律回到旧槽。
+A 24 KiB image is about 200 frames, well under a second on the wire; flash erase and programming dominate, so an
+update should take a few seconds.
 
-速率估算：载荷 128 B，帧约 150 B，1 Mbps 下一帧加回复约 2 ms，24 KiB 约 200 帧，
-传输不到 1 s；Flash 编程和擦除（4 KiB 页约 数 ms）是主要耗时，整体 3–5 s。
+## Safety
 
-## 5. 安全与防砖
-
-| 风险 | 对策 |
+| Risk | Measure |
 |---|---|
-| 升级中断电 | bootloader 与另一个槽不动；目标槽头部未写完，视为空，下次仍启动旧槽或停在升级模式 |
-| 写坏 bootloader | 选项字节 WRP 保护前 8 KiB；OTA 代码只接受槽地址 |
-| 传输错包 | DXL CRC16 逐包；`END` 再做整包 CRC32 |
-| 镜像不匹配板型 | 头部 `hw_id` 与 `min_boot_version` 校验 |
-| 误触发 | 两步解锁，并要求 ID 精确匹配；广播不触发 `ENTER_BOOT` |
-| 机器人正在运动 | 上位机在升级前提示并检查舵机力矩状态；IMU 在升级模式下不再输出，控制环会收到超时 |
-| 新镜像起不来 | 试运行计数 + 自动回退到旧槽 |
+| Power loss during an update | The bootloader and the other slot are untouched; a half-written slot has no valid header |
+| Corrupting the bootloader | Write protection on the first 8 KiB; the update code only accepts slot addresses |
+| Transfer errors | DXL CRC-16 per frame, CRC-32 over the whole image |
+| Wrong image for the board | Hardware ID and minimum bootloader version in the header |
+| Accidental trigger | Two-step unlock, exact ID match, no broadcast |
+| New image does not start | Unconfirmed-start counter with automatic fall-back |
 
-不做签名：CH32V203 上放 Ed25519 验签不划算（约 10 KiB+ Flash）。如需防篡改，可在头部
-预留 `signature` 字段，后续用 HMAC 或硬件加密外设实现。
+Signatures are not planned: Ed25519 verification would take about 10 KiB of flash. The header reserves room for a
+signature or MAC.
 
-## 6. 配置兼容
+## Implementation and acceptance
 
-- 配置页（地址、双槽、CRC32）不变，bootloader 链接同一份 `config.c`，用来读取 ID 和波特率。
-- 配置记录已升级到版本 2，版本 1 的记录由加载代码自动迁移（ID/波特率保留）。
-
-## 7. 实施步骤与验收
-
-1. 抽出硬件无关的 OTA 状态机（`src/ota.c`）：槽头部校验、BEGIN/WRITE/END/COMMIT、
-   偏移重发规则、试运行计数，配主机单元测试，覆盖 CRC 错误、重复块、乱序、断电点注入；
-2. 写 bootloader（USART3 + USART2、DXL 解析、Flash 驱动、CRC32），目标 ≤ 7 KiB；
-3. 链接脚本和 `build.ps1`/CMake 增加两个槽的构建，产出 `app-A.bin`、`app-B.bin` 和合并镜像；
-4. 应用侧加状态区和 `ENTER_BOOT`，首次部署用 SWD 一次性烧入 bootloader + 槽 A；
-5. 上位机加 `flash` 子命令（自动选槽、分块、重发、校验、等待确认）；
-6. 台架验收：
-   - 空板、单槽、双槽三种起点各升级 20 次；
-   - 数据传输中、`END` 前后、`COMMIT` 前后各断电 20 次，必须都能再次 OTA；
-   - 故意传坏 CRC、错板型、超大镜像，必须被拒且旧版本仍可运行；
-   - 新镜像故意不确认，必须在 3 次启动后回退；
-   - 1 Mbps 总线上与舵机 50 Hz 读写并发，确认不丢包（升级期间 IMU 不可用，属预期）。
-
-## 8. 备选：单槽 + 常驻 bootloader
-
-布局为 Boot 8 KiB + App 48 KiB + Config 8 KiB。bootloader 一直在，升级中断后停在升级模式
-等待重传，同样不会变砖；缺点是没有旧版本可回退，新镜像逻辑错误只能再次 OTA，或者
-SWD 恢复。如果应用将来超过 24 KiB，才选这个。
-
-## 9. 结论
-
-推荐 A/B 双槽。工作量主要在 bootloader 和上位机，固件应用侧的改动很小。
-这是一个独立功能，应在量程/参数功能验证稳定之后单独立项，不与它合并实现。
+1. A hardware-independent state machine (`src/ota.c`) with host tests: header validation, begin/write/end/commit,
+   retransmission rules, trial-start counting, power-loss injection at every step.
+2. The bootloader (USART3 and USART2, DXL parser, flash driver, CRC-32), target 7 KiB or less.
+3. Linker scripts and build entries for both slots.
+4. Application status registers and `ENTER_BOOT`; first deployment by SWD (bootloader plus slot A).
+5. An update command in the host tool.
+6. Bench acceptance: 20 updates from each starting state; 20 power cuts at each of: during transfer, before and after
+   `END`, before and after `COMMIT` (each must still allow a new update); rejected images (bad CRC, wrong board, too
+   large) must leave the old version running; an image that never confirms must fall back after three starts.

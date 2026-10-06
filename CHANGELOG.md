@@ -1,0 +1,47 @@
+# Changelog
+
+Firmware versions are reported in the diagnostics block (address 160). Test results are in
+[docs/validation.md](docs/validation.md).
+
+## 0x020B — unreleased
+
+- Gyro range, accelerometer range, sensor rate and SFLP rate are configurable over the bus (addresses 224–227,
+  running values at 232–235) and stored in flash. Defaults are unchanged: ±500 dps, ±2 g, 240 Hz.
+- Configuration record version 2; version 1 records are upgraded on load and keep their ID and baud rate.
+- Wire gyro counts follow the configured full scale.
+- Fix: `LOAD_DEFAULTS` now discards earlier staged writes.
+- Build option `IMU_POWER_DEFAULT_ID` sets the factory ID at compile time (default 200).
+- `scripts/build-xpack.sh` builds with the xPack toolchain on macOS/Linux.
+
+## 0x020A — 2026-09-24
+
+- The raw 1 Mbps soft bus moved from USART1 (PA9/PA10) to USART2 (PA2/PA3) with DMA1 channels 6 and 7.
+- USART1 is now always the 115,200 bps text CLI; the separate CLI build is no longer needed.
+- Idle pull-ups on PA3 and PA10.
+- `dxl_softbus_tool.py check` combines IMU sampling, bus scan and servo status; PASS/WARN/FAIL with exit codes 0/1/2;
+  DYNAMIXEL status bit `0x80` is reported as an alert, not a protocol error.
+- BIN 15,956 bytes, SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`.
+
+## 0x0209 — 2026-09-18
+
+- Fix: USART1 RX is pulled up while idle. A floating input produced spurious bytes that the bridge echoed onto the
+  DXL bus.
+
+## 0x0208 — 2026-09-17
+
+- USART1 became a raw 1 Mbps 8N1 bridge to the DXL bus (DMA with idle-line framing, bursts of up to 512 bytes,
+  4,096-byte mirror queue); the internal device answers requests without relying on the bus echo.
+- Status flags for bridge overflow and echo mismatch; larger physical-bus RX ring (1,024 bytes).
+- `tools/dxl_softbus_tool.py`: multi-baud scan, servo ID/baud change with dry run and safety checks.
+
+## 0x0207 — 2026-09-17
+
+- Accelerometer, gyro and SFLP run at the 240 Hz setting (previously 120 Hz).
+
+## 0x0206 — 2026-09-16
+
+- Fixes for lost combined reads (DMA ring index, first-packet truncation, byte stuffing, CRC order, bad-frame
+  recovery).
+- Gyro set explicitly to ±500 dps (17.5 mdps/LSB); sample counter advances only on new SFLP records; sample age is
+  reported; SFLP gyro bias is applied; SFLP_ODR reserved bits are preserved; quaternion validity and binary16
+  encoding hardened.

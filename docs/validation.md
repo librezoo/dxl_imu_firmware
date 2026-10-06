@@ -1,174 +1,54 @@
-# 固件验证记录
+# Validation record
 
-日期：2026-09-11。
+What has been verified for each firmware version, and what has not. Details of the individual test sessions are
+in the Git history. Test hosts: Windows with an FTDI adapter at 1 Mbps (0x0201–0x020A) and macOS with an FTDI
+adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitable for 1 Mbps acceptance.
 
-CMake 宿主构建可用。原测试包长断言重复计入头部，整理时将断言改为准确长度并增加填充字节和解析后载荷检查；运行代码未因该修正改变。修正后 CTest 1/1 通过。此测试未覆盖与独立 Dynamixel 实现的全部线协议互通情形。
+## Measurement conditions
 
-## SDK 纳入仓库后的验证
+- Serial timing needs a USB-UART with a 1 ms latency timer. With the default 16 ms VCP latency, 193 of 30,000
+  50 Hz cycles timed out at the cycle boundary; this was traced to USB host buffering, not to the firmware or the bus.
+- Attaching the WCH-Link debugger changes the target PLL and raises the UART rate by about 25 %. Detach it and
+  reset the board before serial measurements.
+- The nominal 240 Hz sensor rate measured about 252 Hz on the board used for 0x020A and about 233 Hz on the board
+  used for 0x020B. `sample_counter` lets a host detect repeated samples.
 
-- WCH EVT 2026.07：纳入 54 个原始文件，共 1,130,389 字节；与来源包逐文件 SHA-256 相同。文件范围和清单见 `vendor/wch-ch32v20x/`。
-- 官方 MounRiver Studio 2 所带 xPack RISC-V Embedded GCC 8.2.0：`build.ps1` 编译、链接并生成 ELF、HEX、BIN、MAP 成功。
-- CMake MCU 入口：使用同一官方工具链和仓库内 SDK，在全新 `build-ch32-cmake/` 目录构建成功。
-- 独立源码检出：从 Git 待提交索引导出到包含空格的 `IMU firmware/` 目录，在仓库外调用脚本并使用包含空格的输出路径，构建成功。此构建与 CMake 验证均将 `WCH_EVT_ROOT` 指向不存在的路径，确认不读取该外部 SDK 设置。
-- 以上三个 MCU 构建的 BIN 文件 SHA-256 完全一致：`418b341a9136f0e45160857c86515d708e280997b431e9386c3123d708db2b4f`。
-- SDK 纳入后重新执行 WSL Ubuntu 的 CMake Debug 宿主构建与 CTest，1/1 通过。
+## Results
 
-官方 `size` 工具输出：text 11,072 字节、data 40 字节、BSS 4,264 字节。应用 Flash 链接范围仍为 56 KiB；最后两个配置页保留。
+| Version | Date | Change | Verified |
+|---|---|---|---|
+| 0x0202 | 2026-09-16 | DMA ring index, DXL byte stuffing and CRC order, bad-frame recovery, first-packet UART truncation | 5,000 combined reads without failure; flash read-back identical, configuration page unchanged |
+| 0x0206 | 2026-09-16 | Gyro fixed at ±500 dps, sample counter and age, SFLP bias, SFLP_ODR reserved bits | 6,000 static and combined reads in total, none failed; flash read-back identical |
+| 0x0207 | 2026-09-17 | Sensor rate raised to 240 Hz | IMU 200 Hz plus servos 50 Hz, 60 s: 12,000/12,000, bus load about 25.6 %. Reading every device at 200 Hz did not meet the target. |
+| 0x0208 | 2026-09-17 | Raw 1 Mbps soft bus on USART1 | Host tests 6/6. IMU 200/200 at 1 Mbps. Two servos and the IMU at 50 Hz, 10 min: 30,000/30,000, mean 2.89 ms, max 6.70 ms. Safe control-table access on two servos: 142/142. Reversible servo ID/baud change by the tool. |
+| 0x0209 | 2026-09-18 | USART1 RX idle pull-up (spurious bytes were echoed onto the bus) | IMU plus 15 servos at 50 Hz: 30,001/30,001. Single IMU at 200 Hz and mixed reads: 12,000/12,000 each, no errors. |
+| 0x020A | 2026-09-24 | Soft bus moved to USART2, CLI always on USART1 | BIN 15,956 bytes, SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`, identical from all three build entries; flash read-back identical. `READ` 300/300, `SYNC_READ` 100/100, CLI commands, baud switching 57.6 k–3 M. A servo (ID 3, model 1200) found through the soft bus; IMU 20/20 samples valid at about 251.7 Hz. |
+| 0x020B | 2026-10-06 | Bus-writable IMU parameters | See below. |
 
-本轮完成编译和软件测试，未执行烧录、实物板卡或舵机运动验收。第三方来源见 `provenance.json`、`vendor/wch-ch32v20x/manifest.json` 和 `THIRD_PARTY.md`。
+## 0x020B
 
-## 2026-09-16：合并读取失败修复
+Build: xPack `riscv-none-elf-gcc` 12.5.0 (not the official WCH GCC 8.2), 16,644 bytes. Host tests 7/7 with
+assertions enabled and `-Wall -Wextra` free of warnings. One CH32V203C8U6 board, reached through the DXL bus
+by a `dxl_debugger_firmware` bridge.
 
-诊断版本 `0x0201` 修复 DMA 环形索引、Dynamixel 字节填充/CRC 和坏帧恢复。
-定位证据、测试范围和烧录状态见 [合并读取修复记录](uart-recovery-2026-09-16.md)。
+- Parameter registers 224–227 and 232–235: a write without unlock returns the access error; an out-of-range
+  value returns the data-range error; a valid write changes only the pending value; the running value changes
+  after a reboot; a saved value reads back identically.
+- A pair with `sflp_odr` above `imu_odr` makes `SAVE` return the result-fail error and nothing is stored.
+- Each gyro range, each accelerometer range and each valid sensor/SFLP rate pair (nine) was applied and read back
+  from the chip (`CTRL1`, `CTRL2`, `CTRL6`, `CTRL8`, `SFLP_ODR`). Sample counter rate: 116.5 Hz (120), 233.3 Hz (240), 468.8 Hz (480); SFLP 60/120/240/480 Hz gave
+  about 58, 116, 234, 469 Hz.
+- Gyro full scales 125–4000 dps: after about 12 s the wire value equals raw − SFLP bias to within 0.04 dps and the
+  static mean is within ±0.07 dps. In the first 1–2 s after a reboot the bias estimate has not converged and the
+  static mean can reach 0.5–1.4 dps.
+- Accelerometer ±2/4/8/16 g: the SFLP gravity direction of a board at rest stays within 0.3–0.83° of the ±2 g
+  value. Behaviour under motion has not been measured.
+- Fixed in this version: `LOAD_DEFAULTS` did not discard earlier staged writes, so a later single-field write
+  restarted from stale data (regression test added).
 
-接入 WCH-Link 后补充了 UART 首包发送修复，版本为 `0x0202`。实机完成 5,000
-次合并读取，全部成功；程序读回一致、配置页保持原值。范围与中间失败记录见
-[烧录与实机复测](hardware-validation-2026-09-16.md)。
+## Not verified
 
-## 2026-09-16：IMU 测量核对与 0x0206
-
-实物确认量程默认 ±125 dps 与上位机 ±500 dps 换算不一致，并修正新样本计数、
-年龄、SFLP 必须保留位以及零偏估计的单位换算。最终 0x0206 静态采集和合并读取
-共 6,000 次全部成功，已烧录并读回确认；记录见
-[IMU 量程与静态验证](sensor-validation-2026-09-16.md)。
-
-## 2026-09-17：240 Hz 与总线负载
-
-本地验证版 `0x0207` 将 IMU/SFLP 名义更新率提升到 240 Hz，policy 配置保持 50 Hz。
-原生只读探针验证了平均 IMU 200 Hz + 舵机 50 Hz 的混合读取，60 秒 12,000 次
-全部成功、线速占用约 25.6%；全设备 200 Hz 读取未达标。完整口径与数据见
-[更新率与总线负载](rate-and-bus-load-2026-09-17.md)。
-
-## 2026-09-17：DEBUG UART 原始软总线 0x0208
-
-默认源码将 USART1 改为固定 1 Mbps 原始字节桥，使用 DMA/IDLE 将 DEBUG 突发
-转发到真实总线，持续镜像真实总线字节，并只在 DEBUG 输出路径抑制自身请求的
-精确物理回显。旧 115200 文本 CLI 由构建开关保留。
-
-- Windows MSVC Release 宿主构建与 CTest：6/6 通过，包括新增 softbus 回显、
-  错配恢复、512 字节边界、环形回绕和溢出测试。
-- MounRiver GCC 8.2.0 默认桥接构建成功：text 14,276 字节、data 48 字节、
-  BSS 10,304 字节；BIN 14,324 字节，SHA-256 为
-  `b4f4f92a937f042925bfd321f7eb1e1b2ff490c752aeab0372211442f586b0aa`。
-- `build.ps1 -DebugCli` 兼容构建成功：text 14,268 字节、data 48 字节、
-  BSS 5,296 字节；BIN 14,316 字节，SHA-256 为
-  `b6b9808c08d7fc0f1439bd373222523c242b8654acf109ea27924183e80b2a52`。
-- PowerShell 与 CMake 两种 MCU 构建入口分别生成完全相同的默认桥接版和 CLI
-  兼容版 BIN。
-
-已解除目标板读保护并烧录 0x0208。正式 1 Mbps 镜像完整读回一致，最终 MCU
-保持运行；内部 IMU 先用 WCH-LinkE 的 921600 临时镜像验证 500/500 次，随后用
-FTDI COM3 对正式 1 Mbps 接口预热后读取 200/200 次。外接舵机确认位于真实总线
-57600、ID 1；与内部 IMU 的联合 `SYNC_READ` 返回两个 CRC 正确状态包。未执行
-舵机写寄存器或运动测试，板内真实总线最终恢复 1 Mbps。
-完整过程见 [DEBUG 软总线实机验证](hardware-softbus-2026-09-17.md)。
-
-同日按用户明确要求，将已确认的 XL330-M288 从 ID 1 / 57,600 修改为 ID 2 /
-1 Mbps；写入前后扭矩均为 0、硬件错误均为 0。最终以 COM3 1 Mbps 连续执行
-`SYNC_READ(124,12,[200,2])` 100 次，100/100 次获得两个顺序及 CRC 正确的
-状态包，未发送运动指令。
-
-随后接入第二个 XL330-M288。扫描确认新设备为 ID 1 / 57,600、原设备为 ID 2 /
-1 Mbps；按用户要求只将新设备的波特率寄存器从 1 改为 3，ID 1 保持不变。
-最终 `SYNC_READ(124,12,[200,1,2])` 连续 100/100 次成功，三个回复顺序、CRC
-和错误码均正确；两台舵机扭矩保持关闭，未写目标位置。
-
-随后对两台型号 1200、固件 V52 的舵机执行完整安全控制表访问测试：每台 71 项，
-合计 142/142 通过，普通 RW 字段均恢复原值；20 个已覆盖/高风险控制字段跳过。
-实测确认 Goal PWM 写会自动置位扭矩，V52 间接区写入也存在非直观副作用，因此
-最终安全版本不写控制目标和间接区。两次探索性副作用均被安全门检测，随后关闭
-扭矩、恢复寄存器并重启清错；最终两台舵机均 torque=0、hardware_error=0，测试后
-三设备同步读再次 100/100 通过。
-
-新增 `tools/dxl_softbus_tool.py` 后完成实机可逆写测试：用 Python 工具将 ID 2 /
-1 Mbps 舵机临时改为 ID 3 / 57,600，写后型号、ID、波特率、扭矩和错误状态全部
-读回正确；随后用同一工具恢复为 ID 2 / 1 Mbps。最终 1 Mbps 扫描仅发现 ID 1、
-ID 2，两台均型号 1200、固件 52，ID 3 不再响应。
-
-最终通过 FTDI D2XX 会话级 1 ms latency 对正式 0x0208 执行 10 分钟三设备
-50 Hz 长稳测试：`SYNC_READ(124,12,[200,1,2])` 30,000/30,000 成功，平均延迟
-2.89 ms、最大 6.70 ms，IMU 无连续重复样本，诊断始终 `status_flags=3`、
-`last_error=0`。VCP 默认 16 ms latency 下出现的 193/30,000 周期边界超时已确认
-属于 USB 主机缓冲，而非固件或真实总线错误。
-
-随后接入第三台 XL330-M288（型号 1200、固件 53、出厂 ID 1 / 57,600），按用户
-要求修改为 ID 3 / 1 Mbps；写前后 torque=0、hardware_error=0。最终扫描发现
-ID 1/2/3 均在 1 Mbps，`SYNC_READ(124,12,[200,1,2,3])` 50 Hz 冒烟测试
-100/100 成功，平均延迟 3.75 ms、最大 4.95 ms。
-
-## 2026-09-24：USART2 软总线与 USART1 常开 CLI 0x020A
-
-将原始软总线入口从 USART1 PA9/PA10 迁移到 USART2 PA2/PA3。USART2 RX/TX
-分别使用 DMA1 Channel 6/7，保持固定 1 Mbps、8N1；USART1 PA9/PA10 恢复为
-固定 115200、8N1 文本维护口，并与软总线同时运行。USART3 PB10/PB11、
-DMA1 Channel 2/3 和 PA15 方向控制继续专用于真实 Dynamixel 总线。
-
-- Windows MSVC Release 宿主构建与 CTest：6/6 通过。
-- Python `dxl_softbus_tool.py self-test`：通过。
-- MounRiver GCC 8.2.0 PowerShell 默认构建成功：text 15,908 字节、data 48
-  字节、BSS 10,436 字节；BIN 15,956 字节。
-- PowerShell 默认入口、旧 `-DebugCli` 兼容入口和 CMake MCU 入口生成的 BIN
-  完全一致，SHA-256 均为
-  `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`。
-
-随后通过 WCH-LinkE 对 CH32V203C8U6（UID `cd-ab-11-5d-4c-be-2a-c7`）解除
-读保护并烧录。烧录后读回的 15,956 字节与构建 BIN 完全一致，SHA-256 仍为
-`3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`。
-
-在 WCH-Link 脱离调试并复位后完成标准速率实测：
-
-- USART2 PA2/PA3 通过 FTDI COM16 在 1 Mbps 读取内部 ID 200，诊断版本
-  `0x020A`、状态 `3`、`last_error=0`。
-- 连续普通 `READ(124,12)` 300/300 成功，平均 15.99 ms、最大 16.23 ms。
-- 连续 `SYNC_READ(124,12,[200])` 100/100 成功，平均 15.99 ms、最大
-  16.16 ms；样本计数从 13,856 增加到 15,358。
-- USART1 PA9/PA10 通过 WCH-Link COM9 在 115200 下执行 `get`、`diag`、
-  `dump-imu`、`dump-errors` 全部成功；最终状态 `3`、错误计数 0、IMU valid=1。
-- USART3 真实总线依次验证 57,600、115,200、1M、2M、3M 配置切换并最终恢复
-  1 Mbps，但五档全 ID 扫描均未发现外部响应者，因此 0x020A 的外部设备转发
-  闭环仍待总线设备正确接入并供电后验证。
-
-随后接入一台 XL330-M288。通过 COM16 的 1 Mbps USART2 软总线扫描发现 ID 3、
-型号 1200、固件 53，确认 USART2 请求转发、USART3 真实总线和回复镜像链路均可用。
-Python 工具新增统一 `check` 命令，并将状态包 bit 7 `0x80` 按 Alert 而非协议错误
-处理；低 7 位错误仍保持失败。只读综合检查得到：
-
-- IMU 20/20 样本唯一、20/20 四元数有效，最终 0x020A 观测更新率约 251.7 Hz，样本年龄
-  1 ms，`last_error=0`。
-- ID 3 能在 Alert 状态下继续被扫描并读取控制表；工具正确报告其输入电压错误、
-  电压、温度、扭矩和 Shutdown 状态，而不会中止整次扫描。
-- 最终 0x020A 诊断状态为 `0x0003`，包含 sample-valid/IMU-ready，无软总线
-  overflow 或 echo mismatch；工具会将任何粘滞状态位名称明确列出。
-
-本次设备检查只读，不修改舵机寄存器。现场舵机保护设置和供电状态属于外部测试
-条件，不作为固件放行配置。
-
-调试过程中确认：WCH-Link 调试附着会临时改变目标 PLL，使保持附着时 UART
-速率约增加 25%。这不是外部 8 MHz 晶振错误；串口实测必须在 WCH-Link 脱离
-调试并复位后进行。
-
-## 0x020B 总线可写 IMU 参数（2026-10-06）
-
-构建：xPack riscv-none-elf-gcc 12.5.0（非官方 WCH GCC 8.2；WCH 专有中断属性映射为标准
-`interrupt("machine")`），16,644 字节。主机测试 7/7（Debug、启用断言、`-Wall -Wextra`
-无警告）。烧录到一块新的 CH32V203C8U6 板，通过调试桥（FTDI → 桥接板 → DXL 总线）访问，
-桥为 `dxl_debugger` 固件。
-
-- 控制表 224..227 参数、232..235 运行值：未解锁写入返回 ACCESS；越界值返回 DATA_RANGE；
-  合法写入只改变待生效值，重启后运行值才变化；保存后重启再读回一致。
-- SFLP 高于传感器速率的组合在保存时返回 RESULT_FAIL，且不写入 Flash。
-- 所有合法组合实机验证芯片寄存器与请求一致（CTRL6/CTRL8/CTRL1/CTRL2/SFLP_ODR），
-  计数器速率：120 Hz 档 116.5、240 Hz 档 233.3、480 Hz 档 468.8；SFLP 60/120/240/480 Hz
-  分别约 58.3/116.5/234.3/468.8。
-- 陀螺仪量程 125/250/500/1000/2000/4000 dps：芯片 FS_G 编码正确；等待约 12 s 使 SFLP 零偏收敛后，
-  对外陀螺仪值等于「原始值 − SFLP 零偏」（最大误差 0.038 dps，小于一个 LSB 加噪声容限），静止
-  均值在 ±0.07 dps 内。重启后头 1–2 s 内零偏估计尚未收敛，静止均值可达 0.5–1.4 dps
-  （500/1000/4000 dps 各一次超过 0.5 dps），属于 SFLP 重新初始化的收敛过程，与量程换算无关。
-- 加速度计 ±2/4/8/16 g：CTRL8.FS_XL 正确；静止时 SFLP 重力方向与 ±2 g 基线相差
-  0.30–0.83°（板子静置，噪声量级），未见换算错误。倾斜/动态下的 SFLP 行为尚未实测。
-- 发现并修复：`LOAD_DEFAULTS` 不清除已暂存的写入，之后的单字段写入会带出旧值
-  （主机测试已加回归）。
-- 配置版本 2 迁移由主机测试覆盖（版本 1 记录保留 ID 与波特率）；尚未在带有真实版本 1 记录的
-  板上实测。
-- 未测试：舵机（总线上没有舵机）、掉电后保存的持久性（只做了软件重启）、官方 WCH 工具链构建。
+- 0x020A: long runs with several external devices, power-loss persistence, IMU unplug recovery, forced
+  watchdog reset, fault-frame injection.
+- 0x020B: servos on the bus, persistence across a real power cycle (only software reboots were done), upgrade of a
+  stored version-1 record on a board (covered by host tests only), a build with the official WCH toolchain.
