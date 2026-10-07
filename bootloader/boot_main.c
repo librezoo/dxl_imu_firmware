@@ -12,6 +12,15 @@
 #include <string.h>
 
 /* Written by the application before it resets into the bootloader (see platform/ch32v203_port.c). */
+/* The serial port that carries the 1 Mbps soft bus: USART2 (PA2/PA3) on the IMU board, USART1 (PA9/PA10) when
+   built with -DIMU_POWER_BOOT_SOFTBUS_USART1 (dxl_debugger_firmware). The physical DXL bus is USART3. */
+#ifdef IMU_POWER_BOOT_SOFTBUS_USART1
+#define SOFT_USART USART1
+#define SOFT_APB2_EXTRA RCC_APB2Periph_USART1
+#else
+#define SOFT_USART USART2
+#define SOFT_APB2_EXTRA 0u
+#endif
 #define BOOT_REQUEST_ADDRESS 0x20004FF0u
 #define BOOT_REQUEST_MAGIC 0x4F544131u
 #define IDLE_RESTART_TICKS (60u * 12000000u) /* 60 s of SysTick at HCLK/8 */
@@ -79,7 +88,7 @@ static void start_application(unsigned slot)
 {
     uint32_t entry = IMU_POWER_OTA_SLOT_ADDRESS(slot) + IMU_POWER_OTA_HEADER_SIZE;
     /* Hand over the peripherals in their reset state. */
-    RCC->APB2PRSTR = RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO;
+    RCC->APB2PRSTR = RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO | SOFT_APB2_EXTRA;
     RCC->APB1PRSTR = RCC_APB1Periph_USART2 | RCC_APB1Periph_USART3;
     RCC->APB2PRSTR = 0u;
     RCC->APB1PRSTR = 0u;
@@ -104,19 +113,30 @@ static void usart_start(USART_TypeDef *port, uint32_t pclk, uint32_t baud)
 
 static void serial_init(uint32_t bus_baud)
 {
-    uint32_t pre = (RCC->CFGR0 >> 8u) & 7u; /* PPRE1 */
-    uint32_t pclk1 = SystemCoreClock >> (pre >= 4u ? pre - 3u : 0u);
-    RCC->APB2PCENR |= RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO;
+    uint32_t pre1 = (RCC->CFGR0 >> 8u) & 7u;  /* PPRE1 */
+    uint32_t pclk1 = SystemCoreClock >> (pre1 >= 4u ? pre1 - 3u : 0u);
+    RCC->APB2PCENR |= RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO | SOFT_APB2_EXTRA;
     RCC->APB1PCENR |= RCC_APB1Periph_USART2 | RCC_APB1Periph_USART3;
     pin_mode(GPIOB, 10u, 0xFu); /* USART3 TX, alternate open drain */
     pin_mode(GPIOB, 11u, 0x4u); /* USART3 RX, floating */
     pin_mode(GPIOA, 15u, 0x3u); /* bus direction, low = receive */
     GPIOA->BCR = 1u << 15u;
+#ifdef IMU_POWER_BOOT_SOFTBUS_USART1
+    pin_mode(GPIOA, 9u, 0xBu);  /* USART1 TX, alternate push-pull */
+    pin_mode(GPIOA, 10u, 0x8u); /* USART1 RX with pull-up: an unconnected adapter stays quiet */
+    GPIOA->BSHR = 1u << 10u;
+#else
     pin_mode(GPIOA, 2u, 0xBu);  /* USART2 TX, alternate push-pull */
-    pin_mode(GPIOA, 3u, 0x8u);  /* USART2 RX with pull-up: an unconnected adapter stays quiet */
+    pin_mode(GPIOA, 3u, 0x8u);  /* USART2 RX with pull-up */
     GPIOA->BSHR = 1u << 3u;
+#endif
     usart_start(USART3, pclk1, bus_baud);
+#ifdef IMU_POWER_BOOT_SOFTBUS_USART1
+    usart_start(USART1, SystemCoreClock >> (((RCC->CFGR0 >> 11u) & 7u) >= 4u ? ((RCC->CFGR0 >> 11u) & 7u) - 3u : 0u),
+                1000000u); /* PCLK2 */
+#else
     usart_start(USART2, pclk1, 1000000u);
+#endif
 }
 
 static void transmit(USART_TypeDef *port, const uint8_t *data, size_t length)
@@ -149,7 +169,7 @@ static uint32_t ticks(void)
 
 static void serve(imu_power_ota_t *ota, bool can_leave)
 {
-    USART_TypeDef *const ports[2] = { USART3, USART2 };
+    USART_TypeDef *const ports[2] = { USART3, SOFT_USART };
     uint32_t last_frame = ticks();
     for (;;) {
         unsigned i;

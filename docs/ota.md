@@ -130,4 +130,5 @@ builds an image that never feeds the watchdog (for testing the fall-back).
 
 Not covered: images are not signed (a signature check would cost about 10 KiB, more than the bootloader's spare
 space); the bootloader region is not write-protected with the option bytes;
-`dxl_debugger_firmware` (a 0x0209 snapshot) has no bootloader and is still programmed over SWD.
+`dxl_debugger_firmware` has its own build of the same bootloader (`-DIMU_POWER_BOOT_SOFTBUS_USART1`, serving USART1
+instead of USART2) and the product ID `0x4402` (`-DIMU_POWER_OTA_HWID`), so update files of the two products refuse each other.

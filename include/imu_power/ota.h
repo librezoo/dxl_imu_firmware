@@ -18,7 +18,11 @@
 #define IMU_POWER_OTA_SLOT_ADDRESS(slot) \
     (IMU_POWER_OTA_FLASH_BASE + IMU_POWER_OTA_BOOT_SIZE + (uint32_t)(slot) * IMU_POWER_OTA_SLOT_SIZE)
 
+/* Identifies the board and firmware family; an update file for another ID is refused. Products that share the
+   hardware but must not exchange images (the DXL debugger bridge) build with another value. */
+#ifndef IMU_POWER_OTA_HWID
 #define IMU_POWER_OTA_HWID 0x4401u
+#endif
 #define IMU_POWER_OTA_BOOT_VERSION 0x0100u
 /* The bootloader image ends with a 16-byte record: magic, version, hardware ID. */
 #define IMU_POWER_OTA_BOOT_INFO_ADDRESS (IMU_POWER_OTA_FLASH_BASE + IMU_POWER_OTA_BOOT_SIZE - 16u)
