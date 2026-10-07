@@ -87,7 +87,7 @@ int main(void)
     assert(device.active_config.gyro_fs == 2u && device.active_config.accel_fs == 0u);
     assert(device.active_config.imu_odr == 7u && device.active_config.sflp_odr == 4u);
     assert(device.runtime_gyro_fs == 2u && device.runtime_imu_odr == 7u);
-    assert(device.diagnostics.firmware_version == 0x020Bu);
+    assert(device.diagnostics.firmware_version == IMU_POWER_FW_VERSION);
 
     /* Parameters are readable without unlock; runtime mirror at 232. */
     assert(exchange(&device, IMU_POWER_DXL_READ, (uint8_t[]){224u, 0u, 4u, 0u}, 4u, payload) == 0);

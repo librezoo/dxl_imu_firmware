@@ -24,6 +24,35 @@ adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitab
 | 0x0209 | 2026-09-18 | USART1 RX idle pull-up (spurious bytes were echoed onto the bus) | IMU plus 15 servos at 50 Hz: 30,001/30,001. Single IMU at 200 Hz and mixed reads: 12,000/12,000 each, no errors. |
 | 0x020A | 2026-09-24 | Soft bus moved to USART2, CLI always on USART1 | BIN 15,956 bytes, SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`, identical from all three build entries; flash read-back identical. `READ` 300/300, `SYNC_READ` 100/100, CLI commands, baud switching 57.6 k–3 M. A servo (ID 3, model 1200) found through the soft bus; IMU 20/20 samples valid at about 251.7 Hz. |
 | 0x020B | 2026-10-06 | Bus-writable IMU parameters | See below. |
+| 0x0210 | 2026-10-07 | Bootloader and firmware update over the bus | See below. |
+
+## 0x0210
+
+Firmware update over the bus ([ota.md](ota.md)). Build: xPack `riscv-none-elf-gcc` 12.5.0; bootloader 6,292 bytes
+of 8,176 available, application 18,228–18,232 bytes per slot (limit 23,552). Test host: macOS, FTDI adapter to a
+`dxl_debugger_firmware` bridge, which forwards to the board on the DXL bus (the soft-bus pins of the board were not
+used); host `mdimu` 0.2.0.
+
+- Host tests 8/8. The update test cuts the power after every flash operation (page erase, half-word or block
+  program) of a complete update, in both directions, and checks that the old image or the complete new one starts and
+  that the update can be repeated.
+- 20 consecutive updates alternating slot A (0x0210) and slot B (0x0211): 20/20 succeeded and were confirmed, 5.1 s
+  each (2.5 s of transfer, limited by the 14 ms round trip of the bridge and USB adapter).
+- Refusals, each leaving the old firmware running: commands while locked, wrong hardware ID, oversized image, bad
+  slot, a transfer corrupted in one byte (refused by the CRC-32 check at `END`, slot stays empty, `COMMIT` refused),
+  erasing the only startable slot, a chunk with a gap.
+- Fall-back: an image that hangs without feeding the watchdog (`-DIMU_POWER_TEST_HANG`) was written and committed;
+  after three trial starts the board ran the previous firmware again (13.6 s) and marked the slot bad; `mdimu`
+  reported it.
+- Update from the bootloader (board waiting in update mode): succeeded. Idle timeout: a board left in update mode
+  returned to the application after 70 s without requests.
+- Web UI: update 0x0211 → 0x0210 from the Firmware tab, with progress, confirmed.
+- Reset during an update: 16 updates were interrupted by `wlink reset` at random times (0.2–5.3 s after the start,
+  covering transfer, verification and the first starts). 15 recovered by themselves and accepted the next update. In
+  the 16th the board stopped answering on the bus and the debugger could no longer attach; it worked again after a
+  power cycle and had kept the old firmware in slot A with slot B empty. The likely cause is a debug reset in the
+  middle of a flash block write that leaves the flash controller busy; this was not investigated further. A real
+  power loss is a power cycle.
 
 ## 0x020B
 
@@ -48,6 +77,10 @@ by a `dxl_debugger_firmware` bridge.
   restarted from stale data (regression test added).
 
 ## Not verified
+
+- 0x0210: a power cut (as opposed to a debug reset) during a flash write on the bench; updates over the soft-bus pins
+  PA2/PA3 (the code path exists, the pins were not reachable); updates with servos active on the bus; a build of
+  the bootloader and slots with the official WCH toolchain; images with a different bootloader version.
 
 - 0x020A: long runs with several external devices, power-loss persistence, IMU unplug recovery, forced
   watchdog reset, fault-frame injection.

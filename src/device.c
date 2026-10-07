@@ -98,6 +98,9 @@ static bool read_registers(const imu_power_device_t *device, uint16_t address,
             out[i] = runtime_params[a - IMU_POWER_IMU_RUNTIME_ADDRESS];
         } else if (a >= IMU_POWER_GYRO_DIAG_ADDRESS && a < IMU_POWER_GYRO_DIAG_ADDRESS + sizeof(gyro_diag)) {
             out[i] = gyro_diag[a - IMU_POWER_GYRO_DIAG_ADDRESS];
+        } else if (a >= IMU_POWER_OTA_STATUS_ADDRESS &&
+                   a < IMU_POWER_OTA_STATUS_ADDRESS + IMU_POWER_OTA_STATUS_LENGTH) {
+            out[i] = device->ota_status[a - IMU_POWER_OTA_STATUS_ADDRESS];
         } else if (a >= 136u && a < 160u) {
             out[i] = 0u;
         } else {
@@ -155,6 +158,29 @@ static bool apply_config_bytes(imu_power_config_t *config, uint16_t address,
     return true;
 }
 
+static uint8_t ota_write(imu_power_device_t *device, uint16_t address, const uint8_t *data,
+                         uint16_t length)
+{
+    uint8_t command;
+    if (address != IMU_POWER_OTA_COMMAND_ADDRESS || length != 1u) return IMU_POWER_DXL_ACCESS;
+    command = data[0];
+    if (command == IMU_POWER_OTA_CMD_UNLOCK) {
+        device->ota_unlock_step = 1u;
+        return IMU_POWER_DXL_OK;
+    }
+    if (command == IMU_POWER_OTA_CMD_UNLOCK_CONFIRM && device->ota_unlock_step == 1u) {
+        device->ota_unlocked = true; device->ota_unlock_step = 0u;
+        return IMU_POWER_DXL_OK;
+    }
+    device->ota_unlock_step = 0u;
+    /* The application only hands over to the bootloader; the update itself runs there. */
+    if (!device->ota_unlocked || command != IMU_POWER_OTA_CMD_ENTER_BOOT || device->ota_slot > 1u)
+        return IMU_POWER_DXL_ACCESS;
+    device->enter_boot_requested = true;
+    device->reboot_requested = true;
+    return IMU_POWER_DXL_OK;
+}
+
 static size_t status(imu_power_device_t *device, uint8_t error,
                      const uint8_t *payload, size_t length, uint8_t *response,
                      size_t capacity, bool broadcast)
@@ -184,7 +210,11 @@ void imu_power_device_init(imu_power_device_t *device,
     device->runtime_accel_fs = device->active_config.accel_fs;
     device->runtime_imu_odr = device->active_config.imu_odr;
     device->runtime_sflp_odr = device->active_config.sflp_odr;
-    device->diagnostics.firmware_version = 0x020Bu;
+    device->diagnostics.firmware_version = IMU_POWER_FW_VERSION;
+    device->ota_slot = 0xFFu;
+    imu_power_ota_status_block(device->ota_status, IMU_POWER_OTA_MODE_APPLICATION,
+                               IMU_POWER_FW_VERSION, 0u, 0xFFu,
+                               (const imu_power_ota_slot_t[2]){{0}, {0}}, 0u, 0u, 0u);
     device->diagnostics.protocol_version = 2u;
     device->sample.valid = false;
 }
@@ -239,6 +269,10 @@ size_t imu_power_device_handle(imu_power_device_t *device,
         if (!addressed || frame->parameter_length < 2u) return 0u;
         address = get_u16(frame->parameters);
         length = (uint16_t)(frame->parameter_length - 2u);
+        if (address >= IMU_POWER_OTA_STATUS_ADDRESS && frame->instruction == IMU_POWER_DXL_WRITE) {
+            return status(device, ota_write(device, address, &frame->parameters[2], length),
+                          NULL, 0u, response, response_capacity, frame->broadcast);
+        }
         if (!maintenance_range(address, length))
             return status(device, IMU_POWER_DXL_ACCESS, NULL, 0u, response, response_capacity, frame->broadcast);
         if (address == 197u && length == 1u) {

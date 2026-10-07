@@ -1,7 +1,7 @@
 # Control table and maintenance interface
 
 The board is a Dynamixel Protocol 2.0 device. This document describes the control table of firmware
-`0x020B` and the text maintenance port. Multi-byte values are little-endian.
+`0x0210` and the text maintenance port. Multi-byte values are little-endian.
 
 ## Protocol
 
@@ -31,6 +31,8 @@ Reads of unlisted addresses in 136–159 return zero; any other unlisted address
 | 208 | 14 | R | Gyro diagnostics |
 | 224 | 4 | R/W | IMU parameters: `gyro_fs`, `accel_fs`, `imu_odr`, `sflp_odr` (apply after reboot) |
 | 232 | 4 | R | IMU parameters in use since the last boot |
+| 768 (`0x0300`) | 32 | R | Firmware update status (slots, versions); see [ota.md](ota.md) |
+| 800 (`0x0320`) | 1 | W | Update command; only the unlock and `ENTER_BOOT` are accepted by the application |
 
 Writes require the maintenance unlock. Reads of 224–227 and 192–196 show the pending (staged) value.
 
@@ -48,7 +50,7 @@ attitude; no mounting rotation or levelling is applied.
 
 | Offset | Size | Field |
 |---:|---:|---|
-| 0 | 2 | Firmware version (`0x020B`) |
+| 0 | 2 | Firmware version (`0x0210`) |
 | 2 | 1 | Protocol version (2) |
 | 3 | 1 | Device ID in use |
 | 4 | 2 | Baud rate in use: 0 = 57,600, 1 = 115,200, 2 = 1 M, 3 = 2 M, 4 = 3 M |

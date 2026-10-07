@@ -78,6 +78,7 @@ $sources = @(
     'src/dxl.c',
     'src/imu_wire.c',
     'src/maintenance.c',
+    'src/ota.c',
     'src/softbus.c'
 )
 $compileFlags = @(

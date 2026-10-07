@@ -4,6 +4,7 @@
 #include "config.h"
 #include "dxl.h"
 #include "imu_wire.h"
+#include "ota.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -69,6 +70,13 @@ typedef struct {
     imu_power_sample_t sample;
     imu_power_diagnostics_t diagnostics;
     imu_power_config_storage_t storage;
+    /* Firmware update. ota_slot is 0 or 1 for a build that runs from a slot behind the bootloader and
+       0xFF for a standalone build (which cannot enter the bootloader). The port keeps ota_status current. */
+    uint8_t ota_slot;
+    uint8_t ota_status[IMU_POWER_OTA_STATUS_LENGTH];
+    uint8_t ota_unlock_step;
+    bool ota_unlocked;
+    bool enter_boot_requested;
 } imu_power_device_t;
 
 void imu_power_device_init(imu_power_device_t *device,

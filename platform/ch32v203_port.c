@@ -42,6 +42,19 @@
 #define IMU_REG_FIFO_DATA_OUT_TAG 0x78u
 #define IMU_WHO_AM_I 0x70u
 
+#ifdef IMU_POWER_OTA
+/* Linked at the start of this slot's header block (link script of scripts/build-ota.sh). */
+extern char __slot_base[];
+/* RAM word pair that asks the bootloader to stay in update mode; survives a software reset. */
+#define OTA_REQUEST_ADDRESS 0x20004FF0u
+#define OTA_REQUEST_MAGIC 0x4F544131u
+/* A new image is confirmed once the IMU works, the bus has been answered and it has run this long. */
+#define OTA_CONFIRM_AFTER_MS 2000u
+static imu_power_ota_flash_t ota_flash;
+static uint8_t ota_unconfirmed;
+static uint8_t bus_answered;
+#endif
+
 static uint8_t dxl_dma_rx[DXL_RX_SIZE];
 static uint16_t dxl_rx_tail;
 static imu_power_dxl_stream_t dxl_rx;
@@ -132,6 +145,58 @@ static bool flash_write(void *context, unsigned slot, const void *src, size_t si
     FLASH_Lock();
     return true;
 }
+
+#ifdef IMU_POWER_OTA
+static void ota_read(void *context, uint32_t address, void *dst, size_t size)
+{
+    (void)context;
+    memcpy(dst, (const void *)address, size);
+}
+
+static bool ota_erase(void *context, uint32_t page)
+{
+    (void)context; (void)page;
+    return false; /* only the bootloader erases application pages */
+}
+
+static bool ota_program(void *context, uint32_t address, const void *src, size_t size)
+{
+    const uint8_t *data = (const uint8_t *)src;
+    size_t i;
+    bool ok = true;
+    (void)context;
+    FLASH_Unlock();
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_WRPRTERR);
+    for (i = 0; ok && i < size; i += 2u) {
+        ok = FLASH_ProgramHalfWord(address + (uint32_t)i,
+                                   (uint16_t)data[i] | ((uint16_t)data[i + 1u] << 8u)) == FLASH_COMPLETE;
+    }
+    FLASH_Lock();
+    return ok;
+}
+
+static void ota_refresh_status(imu_power_device_t *device)
+{
+    imu_power_ota_slot_t slots[2];
+    const uint32_t *boot_info = (const uint32_t *)IMU_POWER_OTA_BOOT_INFO_ADDRESS;
+    uint16_t boot_version = boot_info[0] == IMU_POWER_OTA_BOOT_INFO_MAGIC ? (uint16_t)boot_info[1] : 0u;
+    imu_power_ota_slot_read(&ota_flash, 0u, false, &slots[0]);
+    imu_power_ota_slot_read(&ota_flash, 1u, false, &slots[1]);
+    imu_power_ota_status_block(device->ota_status, IMU_POWER_OTA_MODE_APPLICATION,
+                               device->diagnostics.firmware_version, boot_version, device->ota_slot,
+                               slots, 0u, 0u, 0u);
+    ota_unconfirmed = slots[device->ota_slot].state == IMU_POWER_OTA_SLOT_TRIAL;
+}
+
+static void ota_confirm_poll(imu_power_device_t *device)
+{
+    if (ota_unconfirmed && imu_ready && bus_answered && systick_ms > OTA_CONFIRM_AFTER_MS) {
+        ota_unconfirmed = 0u;
+        (void)imu_power_ota_confirm(&ota_flash, device->ota_slot);
+        ota_refresh_status(device);
+    }
+}
+#endif
 
 static void dxl_direction(bool transmit)
 {
@@ -422,6 +487,9 @@ static void handle_dxl_byte(imu_power_device_t *device, uint8_t value)
             device, &frame, dxl_response, sizeof(dxl_response));
         if (response_length != 0u &&
             bus_send(dxl_response, response_length, false)) {
+#ifdef IMU_POWER_OTA
+            bus_answered = 1u;
+#endif
             /* The target board's RX path does not monitor local TX. Queue the
                exact status bytes for the USART2 soft-bus controller. */
             (void)imu_power_softbus_queue_debug(&softbus, dxl_response,
@@ -548,6 +616,11 @@ void imu_power_ch32_port_init(imu_power_device_t *device)
     SysTick->CTLR = 0x0Fu;
     NVIC_EnableIRQ(SysTick_IRQn);
     imu_power_device_init(device, &storage);
+#ifdef IMU_POWER_OTA
+    ota_flash.read = ota_read; ota_flash.erase = ota_erase; ota_flash.program = ota_program;
+    device->ota_slot = (uint8_t)(((uint32_t)__slot_base - IMU_POWER_OTA_SLOT_ADDRESS(0u)) / IMU_POWER_OTA_SLOT_SIZE);
+    ota_refresh_status(device);
+#endif
     if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET) device->diagnostics.reset_reason |= 1u;
     if (RCC_GetFlagStatus(RCC_FLAG_SFTRST) != RESET) device->diagnostics.reset_reason |= 2u;
     RCC_ClearFlag();
@@ -613,6 +686,13 @@ void imu_power_ch32_port_poll(imu_power_device_t *device)
             device->diagnostics.status_flags |= IMU_POWER_STATUS_IMU_INIT_FAULT;
         }
     }
+#ifdef IMU_POWER_OTA
+    ota_confirm_poll(device);
+    if (device->reboot_requested && device->enter_boot_requested) {
+        ((volatile uint32_t *)OTA_REQUEST_ADDRESS)[0] = OTA_REQUEST_MAGIC;
+        ((volatile uint32_t *)OTA_REQUEST_ADDRESS)[1] = ~OTA_REQUEST_MAGIC;
+    }
+#endif
     if (device->reboot_requested) imu_power_ch32_port_request_reboot();
 }
 

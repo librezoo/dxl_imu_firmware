@@ -10,6 +10,10 @@
 #ifndef IMU_POWER_DEFAULT_ID
 #define IMU_POWER_DEFAULT_ID 200u
 #endif
+/* Firmware version reported at address 160; override for test builds with -DIMU_POWER_FW_VERSION=0x....u */
+#ifndef IMU_POWER_FW_VERSION
+#define IMU_POWER_FW_VERSION 0x0210u
+#endif
 #define IMU_POWER_DEFAULT_BAUD 1000000u
 #define IMU_POWER_CONFIG_MAGIC 0x494D5532u
 #define IMU_POWER_CONFIG_VERSION 2u
@@ -90,6 +94,8 @@ bool imu_power_config_save(const imu_power_config_storage_t *storage,
                            uint32_t current_generation,
                            uint32_t *new_generation);
 uint32_t imu_power_crc32(const void *data, size_t size);
+/* Incremental form: start with 0xFFFFFFFF, feed the pieces, invert the final state. */
+uint32_t imu_power_crc32_update(uint32_t state, const void *data, size_t size);
 
 #endif
 

@@ -19,7 +19,7 @@ F="-Os $A -msmall-data-limit=8 -mno-save-restore -ffunction-sections -fdata-sect
 -I$R/include -I$R/platform -I$SRC/Core -I$SRC/Debug -I$SRC/Peripheral/inc -I$SYS"
 for f in "$SRC/Core/core_riscv.c" "$P"/ch32v20x_{gpio,rcc,spi,usart,dma,exti,flash,iwdg,misc}.c \
          "$SYS/system_ch32v20x.c" "$R/platform/ch32_main.c" "$R/platform/ch32v203_port.c" \
-         "$SRC/Startup/startup_ch32v20x_D6.S" "$R"/src/{config,device,dxl,imu_wire,maintenance,softbus}.c; do
+         "$SRC/Startup/startup_ch32v20x_D6.S" "$R"/src/{config,device,dxl,imu_wire,maintenance,ota,softbus}.c; do
   riscv-none-elf-gcc $F -c "$f" -o "$(basename "$f").o"
 done
 riscv-none-elf-gcc $A -nostartfiles --specs=nano.specs --specs=nosys.specs -T imu_power_link.ld \

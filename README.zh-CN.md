@@ -18,6 +18,8 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 - 原始软总线：USART2 上的 USB-UART 原样桥接到真实 DXL 总线，总线流量回传给它，板子自己的 ID 也在同一条线上
   可访问。
 - USART1 提供 115,200 bps 文本维护口，与软总线同时工作。
+- 总线固件升级：引导程序加两个应用槽，新固件经校验、试运行并由自己确认；升级失败自动回到旧版本
+  （[docs/ota.md](docs/ota.md)，英文）。
 
 ## 状态
 
@@ -25,14 +27,26 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 
 | | |
 |---|---|
-| 版本 | `0x020B`（标签 `firmware-20261006-0x020b`）；上一发布 `0x020A` |
+| 版本 | `0x0210`（引导程序 `0x0100`）；上一发布 `0x020B`（标签 `firmware-20261006-0x020b`） |
 | MCU / IMU | CH32V203C8U6（8 MHz 晶振）/ LSM6DSV16X |
 | 默认值 | ID 200，1,000,000 bps；±500 dps、±2 g、240 Hz |
 | 软总线 | USART2，PA2（TX）/ PA3（RX），1,000,000 bps 8N1 |
 | 文本 CLI | USART1，PA9（TX）/ PA10（RX），115,200 bps 8N1 |
-| 宿主机测试 | 7/7 通过 |
+| 宿主机测试 | 8/8 通过 |
 
 已经测过什么、没有测过什么：[docs/validation.md](docs/validation.md)（英文）。
+
+## 通过总线升级固件
+
+用 SWD 一次性写入引导程序和槽 A 之后，新固件通过 DXL 总线写入：
+
+```bash
+scripts/build-ota.sh                                      # build-ota/dxl_imu_firmware-<版本>.dxlfw、initial.bin
+wlink flash --address 0x08000000 build-ota/initial.bin    # 仅一次
+mdimu ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
+```
+
+`dxl_imu_host` 的网页界面有"固件"页，可以做同样的事。分区、协议和安全措施见 [docs/ota.md](docs/ota.md)（英文）。
 
 ## 构建
 
@@ -96,7 +110,7 @@ wlink reset
 | [docs/architecture.md](docs/architecture.md) | 硬件、源码结构、软总线、数据通路、Flash 布局、构建 |
 | [docs/tools.md](docs/tools.md) | `dxl_softbus_tool.py` |
 | [docs/validation.md](docs/validation.md) | 验证记录 |
-| [docs/ota-design.md](docs/ota-design.md) | 总线固件升级方案（未实现） |
+| [docs/ota.md](docs/ota.md) | 总线固件升级：分区、引导程序、协议、安全措施 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本历史 |
 | [THIRD_PARTY.md](THIRD_PARTY.md) | 第三方代码与许可 |
 
@@ -105,8 +119,9 @@ wlink reset
 ```text
 include/imu_power/  可移植接口            src/      可移植核心
 platform/           CH32V203 适配         tests/    宿主机测试
-scripts/            xPack 构建            tools/    软总线工具
-vendor/             固定版本 WCH SDK      docs/     文档
+bootloader/         A/B 槽引导程序        tools/    软总线工具、升级打包
+scripts/            xPack 构建            docs/     文档
+vendor/             固定版本 WCH SDK
 ```
 
 ## 许可

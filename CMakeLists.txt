@@ -10,6 +10,7 @@ add_library(imu_power_core
     src/dxl.c
     src/imu_wire.c
     src/maintenance.c
+    src/ota.c
     src/softbus.c
 )
 target_include_directories(imu_power_core PUBLIC include)
@@ -22,6 +23,10 @@ add_test(NAME imu_power_core_tests COMMAND imu_power_core_tests)
 add_executable(imu_power_param_tests tests/test_params.c)
 target_link_libraries(imu_power_param_tests PRIVATE imu_power_core)
 add_test(NAME imu_power_param_tests COMMAND imu_power_param_tests)
+
+add_executable(imu_power_ota_tests tests/test_ota.c)
+target_link_libraries(imu_power_ota_tests PRIVATE imu_power_core)
+add_test(NAME imu_power_ota_tests COMMAND imu_power_ota_tests)
 
 add_executable(imu_power_dma_ring_tests tests/test_dma_ring.c)
 target_link_libraries(imu_power_dma_ring_tests PRIVATE imu_power_core)
@@ -81,7 +86,7 @@ if(IMU_POWER_BUILD_CH32)
         platform/ch32_main.c
         platform/ch32v203_port.c
         ${WCH_SRC}/Startup/startup_ch32v20x_D6.S
-        src/config.c src/device.c src/dxl.c src/imu_wire.c src/maintenance.c src/softbus.c
+        src/config.c src/device.c src/dxl.c src/imu_wire.c src/maintenance.c src/ota.c src/softbus.c
     )
     target_compile_definitions(imu_power_ch32 PRIVATE IMU_POWER_CH32 CH32V20x_D6)
     if(IMU_POWER_DEBUG_CLI)

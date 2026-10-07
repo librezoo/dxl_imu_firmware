@@ -110,19 +110,23 @@ void imu_power_config_defaults(imu_power_config_t *config)
     }
 }
 
-uint32_t imu_power_crc32(const void *data, size_t size)
+uint32_t imu_power_crc32_update(uint32_t state, const void *data, size_t size)
 {
     const uint8_t *bytes = (const uint8_t *)data;
-    uint32_t crc = 0xFFFFFFFFu;
     size_t i;
     unsigned bit;
     for (i = 0; i < size; ++i) {
-        crc ^= bytes[i];
+        state ^= bytes[i];
         for (bit = 0; bit < 8u; ++bit) {
-            crc = (crc >> 1u) ^ (0xEDB88320u & (uint32_t)-(int32_t)(crc & 1u));
+            state = (state >> 1u) ^ (0xEDB88320u & (uint32_t)-(int32_t)(state & 1u));
         }
     }
-    return ~crc;
+    return state;
+}
+
+uint32_t imu_power_crc32(const void *data, size_t size)
+{
+    return ~imu_power_crc32_update(0xFFFFFFFFu, data, size);
 }
 
 bool imu_power_config_load(const imu_power_config_storage_t *storage,

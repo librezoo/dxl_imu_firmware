@@ -55,6 +55,9 @@ target clock and shifts the UART rate by about 25 %.
 
 ## Other tools
 
+`tools/ota_pack.py` builds the update file and the first-flash image from the bootloader and slot binaries (it is
+run by `scripts/build-ota.sh`; see [ota.md](ota.md)). Updates are sent with `mdimu ota update` of `dxl_imu_host`.
+
 [DYNAMIXEL Wizard 2.0](https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_wizard2/) works for
 servos on the same port (Protocol 2.0, 1,000,000 baud). The internal IMU is not a servo: never run Firmware
 Update or Factory Reset on it, and read its control table with a manual `READ` packet (address 124, length 12).

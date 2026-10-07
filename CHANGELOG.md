@@ -3,6 +3,17 @@
 Firmware versions are reported in the diagnostics block (address 160). Test results are in
 [docs/validation.md](docs/validation.md).
 
+## 0x0210 — 2026-10-07
+
+- Firmware update over the bus: a resident bootloader (8 KiB) with two 24 KiB application slots, trial start and
+  automatic fall-back, update window at 0x0300–0x04FF, `ENTER_BOOT` in the application. See
+  [docs/ota.md](docs/ota.md). `mdimu ota update` (`dxl_imu_host` 0.2.0) performs the update.
+- New files: `bootloader/`, `src/ota.c`, `scripts/build-ota.sh`, `tools/ota_pack.py`; `docs/ota-design.md` became
+  `docs/ota.md`.
+- The standalone image (`build.ps1`, `build-xpack.sh`) is unchanged apart from the update status registers; the
+  first deployment of the bootloader is over SWD (`initial.bin`).
+- `IMU_POWER_FW_VERSION` sets the reported version at compile time.
+
 ## 0x020B — 2026-10-06
 
 - Gyro range, accelerometer range, sensor rate and SFLP rate are configurable over the bus (addresses 224–227,

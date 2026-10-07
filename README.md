@@ -19,6 +19,8 @@ USB-UART to that bus.
 - Raw soft bus: a USB-UART on USART2 is bridged unchanged to the physical DXL bus, with the bus traffic mirrored
   back, and the board's own ID reachable on the same line.
 - 115,200 bps text maintenance port on USART1, active at the same time.
+- Firmware update over the bus: two application slots behind a bootloader, verified, started as a trial and
+  confirmed by the new firmware; a failed update falls back to the old one ([docs/ota.md](docs/ota.md)).
 
 ## Status
 
@@ -26,14 +28,27 @@ USB-UART to that bus.
 
 | | |
 |---|---|
-| Version | `0x020B` (tag `firmware-20261006-0x020b`); previous release `0x020A` |
+| Version | `0x0210` (bootloader `0x0100`); previous release `0x020B` (tag `firmware-20261006-0x020b`) |
 | MCU / IMU | CH32V203C8U6 (8 MHz crystal) / LSM6DSV16X |
 | Defaults | ID 200, 1,000,000 bps; ±500 dps, ±2 g, 240 Hz |
 | Soft bus | USART2, PA2 (TX) / PA3 (RX), 1,000,000 bps 8N1 |
 | Text CLI | USART1, PA9 (TX) / PA10 (RX), 115,200 bps 8N1 |
-| Host tests | 7/7 pass |
+| Host tests | 8/8 pass |
 
 What has been tested, and what has not: [docs/validation.md](docs/validation.md).
+
+## Update the firmware over the bus
+
+After the one-time installation over SWD (bootloader and slot A), new firmware is written through the DXL bus:
+
+```bash
+scripts/build-ota.sh                                      # build-ota/dxl_imu_firmware-<version>.dxlfw, initial.bin
+wlink flash --address 0x08000000 build-ota/initial.bin    # once
+mdimu ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
+```
+
+The web UI of `dxl_imu_host` has a Firmware tab for the same. Layout, protocol and safety measures:
+[docs/ota.md](docs/ota.md).
 
 ## Build
 
@@ -96,7 +111,7 @@ wlink reset
 | [docs/architecture.md](docs/architecture.md) | Hardware, source layout, soft bus, data path, flash layout, builds |
 | [docs/tools.md](docs/tools.md) | `dxl_softbus_tool.py` |
 | [docs/validation.md](docs/validation.md) | Verification record |
-| [docs/ota-design.md](docs/ota-design.md) | Proposal for bus firmware updates (not implemented) |
+| [docs/ota.md](docs/ota.md) | Firmware update over the bus: slots, bootloader, protocol, safety |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [THIRD_PARTY.md](THIRD_PARTY.md) | Third-party code and licences |
 
@@ -105,8 +120,9 @@ wlink reset
 ```text
 include/imu_power/  portable interfaces        src/       portable core
 platform/           CH32V203 port              tests/     host tests
-scripts/            xPack build                tools/     soft-bus tool
-vendor/             pinned WCH SDK             docs/      documentation
+bootloader/         A/B slot bootloader        tools/     soft-bus tool, update packer
+scripts/            xPack builds               docs/      documentation
+vendor/             pinned WCH SDK
 ```
 
 ## Licence

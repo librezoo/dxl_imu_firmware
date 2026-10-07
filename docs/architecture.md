@@ -12,8 +12,9 @@
 
 | Path | Role |
 |---|---|
-| `include/imu_power/`, `src/` | Portable core: Dynamixel framing and CRC, control table, configuration storage, IMU sample packing, soft-bus bridge logic, text CLI. No hardware headers. |
-| `platform/` | CH32V203 port: clocks, GPIO, USART/DMA, SPI, flash, watchdog, main loop. The only code that includes WCH headers. |
+| `include/imu_power/`, `src/` | Portable core: Dynamixel framing and CRC, control table, configuration storage, IMU sample packing, soft-bus bridge logic, text CLI, update protocol and slot selection (`ota.c`). No hardware headers. |
+| `platform/` | CH32V203 port: clocks, GPIO, USART/DMA, SPI, flash, watchdog, main loop. With `bootloader/`, the only code that includes WCH headers. |
+| `bootloader/` | Bootloader for the A/B slots: linker script, reset handler, serial/flash glue around `src/ota.c` (see [ota.md](ota.md)) |
 | `vendor/wch-ch32v20x/` | Pinned WCH EVT SDK (see `manifest.json` for per-file SHA-256). The build reads nothing outside the repository. |
 | `tests/` | Host tests of the portable core (C99, CMake/CTest). |
 
@@ -60,20 +61,22 @@ switch `-DebugCli` are accepted for compatibility and have no effect.
 
 ## Flash layout
 
-| Range | Use |
-|---|---|
-| `0x08000000`–`0x0800DFFF` | Application (linker region capped at 56 KiB) |
-| `0x0800E000`, `0x0800F000` | Two configuration pages |
+| Range | Standalone image | With bootloader (`scripts/build-ota.sh`) |
+|---|---|---|
+| `0x08000000`–`0x08001FFF` | Application | Bootloader |
+| `0x08002000`–`0x0800DFFF` | Application (linker region capped at 56 KiB) | Slots A and B, 24 KiB each |
+| `0x0800E000`, `0x0800F000` | Two configuration pages | Two configuration pages |
 
 Updating the application must not erase the configuration pages. Clearing read protection erases the whole
-chip, including both pages.
+chip, including both pages. Details of the slots: [ota.md](ota.md).
 
 ## Build entries
 
 | Entry | Toolchain | Notes |
 |---|---|---|
 | `build.ps1` | MounRiver Studio 2 WCH RISC-V GCC 8.2.0 | Windows. Verifies the SDK hashes, rebuilds everything. Reference build. |
-| `scripts/build-xpack.sh` | xPack `riscv-none-elf-gcc` | macOS/Linux. Maps the WCH-specific interrupt attribute to the standard one. |
+| `scripts/build-xpack.sh` | xPack `riscv-none-elf-gcc` | macOS/Linux. Maps the WCH-specific interrupt attribute to the standard one. Standalone image. |
+| `scripts/build-ota.sh` | xPack `riscv-none-elf-gcc` | Bootloader, both slots, update file and first-flash image. |
 | CMake, `IMU_POWER_BUILD_CH32=ON` | RISC-V GCC with a C library | Optional MCU build; see the README. |
 | CMake (default) | Host C99 compiler | Builds and runs the host tests. |
 
@@ -82,7 +85,8 @@ in step.
 
 ## Host tests
 
-`ctest` runs seven executables: control table and maintenance sequence (`core`); IMU parameters, configuration
+`ctest` runs eight executables: control table and maintenance sequence (`core`); IMU parameters, configuration
 persistence and migration (`param`); DXL CRC, byte stuffing and parsing (`dxl_wire`, `dxl_stream`); circular-buffer
-indexing (`dma_ring`); IMU sample packing and scaling (`imu_sample`); and the soft-bus bridge — echo suppression,
+indexing (`dma_ring`); firmware update — slot selection, trial starts, protocol refusals and a power cut after every flash
+operation (`ota`); IMU sample packing and scaling (`imu_sample`); and the soft-bus bridge — echo suppression,
 mismatch recovery, 512-byte bursts and queue overflow (`softbus`).
