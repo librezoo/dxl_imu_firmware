@@ -11,7 +11,7 @@
     <rect x="790" y="230" width="140" height="90" rx="6"/>
   </g>
   <g fill="#15161a" text-anchor="middle">
-    <text x="105" y="128" font-weight="700">Host PC</text><text x="105" y="150">mdbus / Python</text><text x="105" y="168" fill="#666">USB-UART, 1 Mbps</text>
+    <text x="105" y="128" font-weight="700">Host PC</text><text x="105" y="150">hdbus / Python</text><text x="105" y="168" fill="#666">USB-UART, 1 Mbps</text>
     <text x="105" y="283" font-weight="700">Terminal</text><text x="105" y="303" fill="#666">115,200 bps CLI</text>
     <text x="860" y="128" font-weight="700">DXL bus</text><text x="860" y="150">servos, other</text><text x="860" y="168">IMU boards</text>
     <text x="860" y="268" font-weight="700">LSM6DSV16X</text><text x="860" y="290">gyro · accel</text><text x="860" y="308" fill="#666">SPI1 · SFLP</text>

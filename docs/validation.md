@@ -31,7 +31,7 @@ adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitab
 Firmware update over the bus ([ota.md](ota.md)). Build: xPack `riscv-none-elf-gcc` 12.5.0; bootloader 6,292 bytes
 of 8,176 available, application 18,228–18,232 bytes per slot (limit 23,552). Test host: macOS, FTDI adapter to a
 `dxl_debugger_firmware` bridge, which forwards to the board on the DXL bus (the soft-bus pins of the board were not
-used); host `mdbus` 0.2.0.
+used); host `hdbus` 0.2.0.
 
 - Host tests 8/8. The update test cuts the power after every flash operation (page erase, half-word or block
   program) of a complete update, in both directions, and checks that the old image or the complete new one starts and
@@ -42,7 +42,7 @@ used); host `mdbus` 0.2.0.
   slot, a transfer corrupted in one byte (refused by the CRC-32 check at `END`, slot stays empty, `COMMIT` refused),
   erasing the only startable slot, a chunk with a gap.
 - Fall-back: an image that hangs without feeding the watchdog (`-DIMU_POWER_TEST_HANG`) was written and committed;
-  after three trial starts the board ran the previous firmware again (13.6 s) and marked the slot bad; `mdbus`
+  after three trial starts the board ran the previous firmware again (13.6 s) and marked the slot bad; `hdbus`
   reported it.
 - Update from the bootloader (board waiting in update mode): succeeded. Idle timeout: a board left in update mode
   returned to the application after 70 s without requests.

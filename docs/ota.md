@@ -99,7 +99,7 @@ slot that can start, 6 out of order, 7 flash, 8 CRC-32 mismatch, 9 wrong state, 
 
 `tools/ota_pack.py` writes `*.dxlfw`: a 16-byte header (`DXLU`, format 1, hardware ID, firmware version, minimum
 bootloader version, entry count), one 16-byte entry per slot (slot, size, CRC-32, offset), the two payloads and a
-CRC-32 of the file. `mdbus ota update` (see `mdbus`) picks the payload for the slot to write.
+CRC-32 of the file. `hdbus ota update` (see `hdbus`) picks the payload for the slot to write.
 
 ## Building and installing
 
@@ -108,7 +108,7 @@ scripts/build-ota.sh                    # build-ota/: bootloader.bin, app-A.bin,
 FW_VERSION=0x0211 scripts/build-ota.sh out   # another version, for tests
 wlink flash --address 0x08000000 build-ota/initial.bin   # once, over SWD: bootloader + slot A
 wlink reset
-mdbus ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
+hdbus ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
 ```
 
 `initial.bin` stops at the end of slot A and leaves the configuration pages alone. The script needs the xPack

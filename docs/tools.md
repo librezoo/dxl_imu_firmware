@@ -2,7 +2,7 @@
 
 A single-file Python tool for the soft bus: inspect the internal IMU, scan the DXL bus and inspect or reconfigure
 Dynamixel servos (XL330-M288 class devices, model 1200) behind the board. For live viewing and IMU settings use
-the `mdbus` web UI instead.
+the `hdbus` web UI instead.
 
 ## Requirements
 
@@ -56,7 +56,7 @@ target clock and shifts the UART rate by about 25 %.
 ## Other tools
 
 `tools/ota_pack.py` builds the update file and the first-flash image from the bootloader and slot binaries (it is
-run by `scripts/build-ota.sh`; see [ota.md](ota.md)). Updates are sent with `mdbus ota update`.
+run by `scripts/build-ota.sh`; see [ota.md](ota.md)). Updates are sent with `hdbus ota update`.
 
 [DYNAMIXEL Wizard 2.0](https://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_wizard2/) works for
 servos on the same port (Protocol 2.0, 1,000,000 baud). The internal IMU is not a servo: never run Firmware
