@@ -47,7 +47,7 @@ wlink flash --address 0x08000000 build-ota/initial.bin    # once
 mdbus ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
 ```
 
-The web UI of `dxl_imu_host` has a Firmware tab for the same. Layout, protocol and safety measures:
+The web UI of `mdbus` has a Firmware tab for the same. Layout, protocol and safety measures:
 [docs/ota.md](docs/ota.md).
 
 ## Build
@@ -99,7 +99,7 @@ wlink reset
 
 ## Using the board
 
-- `dxl_imu_host` (`mdbus`): live attitude and gyro, IMU settings, ID and baud rate, bus scan.
+- `mdbus`: live attitude and gyro, IMU settings, ID and baud rate, bus scan.
 - [`tools/dxl_softbus_tool.py`](docs/tools.md): IMU check, bus scan and servo configuration.
 - A USB-UART with 1 Mbps support (an FTDI works; the serial port of the WCH-LinkE does not) on PA2/PA3 and GND.
 

@@ -99,7 +99,7 @@ slot that can start, 6 out of order, 7 flash, 8 CRC-32 mismatch, 9 wrong state, 
 
 `tools/ota_pack.py` writes `*.dxlfw`: a 16-byte header (`DXLU`, format 1, hardware ID, firmware version, minimum
 bootloader version, entry count), one 16-byte entry per slot (slot, size, CRC-32, offset), the two payloads and a
-CRC-32 of the file. `mdbus ota update` (see `dxl_imu_host`) picks the payload for the slot to write.
+CRC-32 of the file. `mdbus ota update` (see `mdbus`) picks the payload for the slot to write.
 
 ## Building and installing
 

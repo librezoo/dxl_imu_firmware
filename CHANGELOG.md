@@ -7,7 +7,7 @@ Firmware versions are reported in the diagnostics block (address 160). Test resu
 
 - Firmware update over the bus: a resident bootloader (8 KiB) with two 24 KiB application slots, trial start and
   automatic fall-back, update window at 0x0300–0x04FF, `ENTER_BOOT` in the application. See
-  [docs/ota.md](docs/ota.md). `mdbus ota update` (`dxl_imu_host` 0.2.0) performs the update.
+  [docs/ota.md](docs/ota.md). `mdbus ota update` (`mdbus` 0.2.0) performs the update.
 - New files: `bootloader/`, `src/ota.c`, `scripts/build-ota.sh`, `tools/ota_pack.py`; `docs/ota-design.md` became
   `docs/ota.md`.
 - The standalone image (`build.ps1`, `build-xpack.sh`) is unchanged apart from the update status registers; the
