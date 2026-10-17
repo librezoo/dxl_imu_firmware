@@ -43,7 +43,7 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 ```bash
 scripts/build-ota.sh                                      # build-ota/dxl_imu_firmware-<版本>.dxlfw、initial.bin
 wlink flash --address 0x08000000 build-ota/initial.bin    # 仅一次
-mdimu ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
+mdbus ota update -p /dev/cu.usbserial-XXXX build-ota/dxl_imu_firmware-0210.dxlfw
 ```
 
 `dxl_imu_host` 的网页界面有"固件"页，可以做同样的事。分区、协议和安全措施见 [docs/ota.md](docs/ota.md)（英文）。
@@ -96,7 +96,7 @@ wlink reset
 
 ## 使用
 
-- `dxl_imu_host`（`mdimu`）：实时姿态和陀螺仪、IMU 设置、ID 与波特率、总线扫描。
+- `dxl_imu_host`（`mdbus`）：实时姿态和陀螺仪、IMU 设置、ID 与波特率、总线扫描。
 - [`tools/dxl_softbus_tool.py`](docs/tools.md)：IMU 检查、总线扫描、舵机配置。
 - 需要支持 1 Mbps 的 USB-UART（FTDI 可以，WCH-LinkE 自带串口不行），接到 PA2/PA3 和 GND。
 

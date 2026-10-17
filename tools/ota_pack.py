@@ -3,7 +3,7 @@
 
     ota_pack.py --boot bootloader.bin --slot-a app-A.bin --slot-b app-B.bin --version 0x0210 --out-dir build-ota
 
-Writes <prefix>-<version>.dxlfw (used by `mdimu ota update`) and initial.bin (bootloader, then slot A
+Writes <prefix>-<version>.dxlfw (used by `mdbus ota update`) and initial.bin (bootloader, then slot A
 with a confirmed header; flash it once over SWD at 0x08000000).
 
 Bundle format (little endian): 16-byte header: magic "DXLU", format 1, hardware ID, firmware version,

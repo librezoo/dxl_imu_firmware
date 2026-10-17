@@ -3,7 +3,7 @@
 # Usage: scripts/build-ota.sh [output-dir]      (default: build-ota/)
 # Environment: FW_VERSION (for example 0x0211, default: include/imu_power/config.h), EXTRA_CFLAGS.
 # Outputs: bootloader.bin, app-A.bin, app-B.bin, dxl_imu_firmware-<version>.dxlfw (update bundle for
-# `mdimu ota update`), and initial.bin (bootloader + slot A, flashed once over SWD at 0x08000000).
+# `mdbus ota update`), and initial.bin (bootloader + slot A, flashed once over SWD at 0x08000000).
 set -euo pipefail
 R="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$R/build-ota}"
