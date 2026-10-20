@@ -3,6 +3,16 @@
 Firmware versions are reported in the diagnostics block (address 160). Test results are in
 [docs/validation.md](docs/validation.md).
 
+## 0x0211 — 2026-10-21
+
+- Fast Sync Read (instruction 0x8A). The board starts the combined status packet when it is the first ID of the
+  request, as the robot's control loop lists it: header from the broadcast ID, then its block with the running CRC.
+  The servos behind it append theirs; they have to implement 0x8A too (XL330 firmware 46 or newer; the KPower
+  RD05T does not). Not first in the list, or addressed directly, the board stays silent. Plain `SYNC_READ` is
+  unchanged. See [docs/control-table.md](docs/control-table.md).
+- Host tests: the first block is checked byte for byte against the ROBOTIS e-manual's status packet. Not yet run on a
+  board.
+
 ## 0x0210 — 2026-10-07
 
 - Firmware update over the bus: a resident bootloader (8 KiB) with two 24 KiB application slots, trial start and

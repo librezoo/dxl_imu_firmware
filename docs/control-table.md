@@ -1,7 +1,7 @@
 # Control table and maintenance interface
 
 The board is a Dynamixel Protocol 2.0 device. This document describes the control table of firmware
-`0x0210` and the text maintenance port. Multi-byte values are little-endian.
+`0x0211` and the text maintenance port. Multi-byte values are little-endian.
 
 ## Protocol
 
@@ -10,9 +10,18 @@ The board is a Dynamixel Protocol 2.0 device. This document describes the contro
 | Default ID / baud rate | 200 / 1,000,000 bps (8N1) |
 | Valid IDs | 0–253 |
 | Valid baud rates | 57,600, 115,200, 1,000,000, 2,000,000, 3,000,000 |
-| Instructions | `PING`, `READ`, `WRITE`, `REG_WRITE`, `ACTION`, `RESET`, `SYNC_READ`, `SYNC_WRITE` |
+| Instructions | `PING`, `READ`, `WRITE`, `REG_WRITE`, `ACTION`, `RESET`, `SYNC_READ`, `SYNC_WRITE`, `FAST_SYNC_READ` (0x8A, see below) |
 | Maximum `READ` length | 64 bytes |
 | Error codes | 1 result fail, 2 instruction, 3 CRC, 4 data range, 5 data length, 6 access |
+
+**Fast Sync Read (0x8A).** The request is a `SYNC_READ`'s (address, length, then the IDs). All devices answer with one
+status packet from the broadcast ID, `FF FF FD 00 FE LEN 55`, followed by one block `ERR ID DATA CRC` per device in
+the order of the request; each CRC covers the packet from its first byte to the end of that block's data, nothing
+is byte-stuffed, and `LEN = 1 + devices × (length + 4)`. The first device sends the header and its block, the others
+append theirs. This board does the first block only: it answers when it is the **first** ID of the list (the robot's
+control loop lists it first), and is silent anywhere else or when addressed directly, so a misplaced board makes the
+read time out rather than collide with the servos. The servos have to implement 0x8A as well, or the whole read times
+out (XL330 firmware 46 or newer; the KPower RD05T does not answer it).
 
 `RESET` reboots the board. `REG_WRITE`, `ACTION` and `SYNC_WRITE` act on the configuration registers only.
 Reads of unlisted addresses in 136–159 return zero; any other unlisted address returns a data-range error.
@@ -50,7 +59,7 @@ attitude; no mounting rotation or levelling is applied.
 
 | Offset | Size | Field |
 |---:|---:|---|
-| 0 | 2 | Firmware version (`0x0210`) |
+| 0 | 2 | Firmware version (`0x0211`) |
 | 2 | 1 | Protocol version (2) |
 | 3 | 1 | Device ID in use |
 | 4 | 2 | Baud rate in use: 0 = 57,600, 1 = 115,200, 2 = 1 M, 3 = 2 M, 4 = 3 M |

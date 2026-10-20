@@ -78,6 +78,86 @@ int main(void)
     assert(response_length != 0u);
     assert(response[4] == 200u);
 
+    /* Fast Sync Read (0x8A). The builder is checked against the ROBOTIS e-manual's status packet for IDs 3, 7, 4
+       reading 4 bytes at 132 (the same vector rustypot parses): this board's block is the first one. */
+    {
+        static const uint8_t emanual[32] = {
+            0xFF, 0xFF, 0xFD, 0x00, 0xFE, 0x19, 0x00, 0x55,
+            0x00, 0x03, 0xA6, 0x00, 0x00, 0x00, 0x84, 0x08,
+            0x00, 0x07, 0x1F, 0x08, 0x00, 0x00, 0x16, 0xCA,
+            0x00, 0x04, 0xFF, 0x03, 0x00, 0x00, 0xD1, 0x9E,
+        };
+        uint8_t block[32];
+        size_t n = imu_power_dxl_build_fast_sync_first_block(3u, 3u, 0u, &emanual[10], 4u, block, sizeof(block));
+        assert(n == 16u && memcmp(block, emanual, 16u) == 0);
+        /* The devices behind this one carry on the running CRC: chain the other two blocks the way they would and
+           arrive at the e-manual's whole packet. */
+        {
+            uint8_t whole[32];
+            uint16_t crc;
+            memcpy(whole, block, 16u);
+            whole[16] = 0u; whole[17] = 7u; memcpy(&whole[18], &emanual[18], 4u);
+            crc = imu_power_dxl_crc16(whole, 22u);
+            whole[22] = (uint8_t)crc; whole[23] = (uint8_t)(crc >> 8u);
+            whole[24] = 0u; whole[25] = 4u; memcpy(&whole[26], &emanual[26], 4u);
+            crc = imu_power_dxl_crc16(whole, 30u);
+            whole[30] = (uint8_t)crc; whole[31] = (uint8_t)(crc >> 8u);
+            assert(memcmp(whole, emanual, sizeof(whole)) == 0);
+        }
+        /* Not building: no room, no blocks, a length that does not fit in 16 bits. */
+        assert(imu_power_dxl_build_fast_sync_first_block(3u, 3u, 0u, &emanual[10], 4u, block, 15u) == 0u);
+        assert(imu_power_dxl_build_fast_sync_first_block(0u, 3u, 0u, &emanual[10], 4u, block, sizeof(block)) == 0u);
+        assert(imu_power_dxl_build_fast_sync_first_block(0xFFFFu, 3u, 0u, &emanual[10], 4u, block, sizeof(block)) == 0u);
+    }
+    {
+        /* The robot's tick: Fast Sync Read of 12 bytes at 124 from the IMU board (listed first) and 15 servos. */
+        uint8_t ids[16], request[16 + 4], expected[64];
+        uint16_t crc;
+        size_t i;
+        for (i = 0u; i < 16u; ++i) ids[i] = (uint8_t)(i == 0u ? 200u : i);
+        request[0] = 124u; request[1] = 0u; request[2] = 12u; request[3] = 0u;
+        memcpy(&request[4], ids, 16u);
+        packet_length = make_packet(0xFEu, IMU_POWER_DXL_FAST_SYNC_READ, request, 20u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        response_length = imu_power_device_handle(&device, &frame, response, sizeof(response));
+        assert(response_length == 12u + 12u);
+        /* one status packet from the broadcast ID that is 16 blocks long in all; this board's is the first */
+        assert(response[4] == 0xFEu && response[7] == 0x55u && response[8] == 0u && response[9] == 200u);
+        assert((uint16_t)(response[5] | (response[6] << 8u)) == 1u + 16u * (12u + 4u));
+        /* its data are the very bytes a plain Read of the same registers returns */
+        packet_length = make_packet(200u, IMU_POWER_DXL_READ, (uint8_t[]){124u, 0u, 12u, 0u}, 4u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        i = imu_power_device_handle(&device, &frame, expected, sizeof(expected));
+        assert(i != 0u && memcmp(&response[10], &expected[9], 12u) == 0);
+        crc = imu_power_dxl_crc16(response, 22u);
+        assert(response[22] == (uint8_t)crc && response[23] == (uint8_t)(crc >> 8u));
+        /* a plain Sync Read of the same list still answers with this board's own status packet */
+        packet_length = make_packet(0xFEu, IMU_POWER_DXL_SYNC_READ, request, 20u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        assert(imu_power_device_handle(&device, &frame, response, sizeof(response)) == 11u + 12u);
+    }
+    {
+        /* Silent where it must be: not first in the list, absent from it, asked directly, or too much to read. */
+        uint8_t request[8];
+        request[0] = 124u; request[1] = 0u; request[2] = 12u; request[3] = 0u;
+        request[4] = 5u; request[5] = 200u;
+        packet_length = make_packet(0xFEu, IMU_POWER_DXL_FAST_SYNC_READ, request, 6u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        assert(imu_power_device_handle(&device, &frame, response, sizeof(response)) == 0u);
+        request[4] = 5u; request[5] = 6u;
+        packet_length = make_packet(0xFEu, IMU_POWER_DXL_FAST_SYNC_READ, request, 6u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        assert(imu_power_device_handle(&device, &frame, response, sizeof(response)) == 0u);
+        request[4] = 200u;
+        packet_length = make_packet(200u, IMU_POWER_DXL_FAST_SYNC_READ, request, 6u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        assert(imu_power_device_handle(&device, &frame, response, sizeof(response)) == 0u);
+        request[2] = (uint8_t)(IMU_POWER_MAX_READ + 1u);
+        packet_length = make_packet(0xFEu, IMU_POWER_DXL_FAST_SYNC_READ, request, 6u, packet, sizeof(packet));
+        assert(imu_power_dxl_parse(packet, packet_length, &frame, scratch, sizeof(scratch)));
+        assert(imu_power_device_handle(&device, &frame, response, sizeof(response)) == 0u);
+    }
+
     {
         uint8_t stuffed_payload[] = {0xFFu, 0xFFu, 0xFDu};
         uint8_t stuffed_packet[64];

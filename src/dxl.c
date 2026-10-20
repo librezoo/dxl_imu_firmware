@@ -103,6 +103,29 @@ size_t imu_power_dxl_build_status(uint8_t id, uint8_t error,
     return wire_length;
 }
 
+size_t imu_power_dxl_build_fast_sync_first_block(uint16_t total_blocks, uint8_t id, uint8_t error,
+                                                 const uint8_t *data, size_t data_length,
+                                                 uint8_t *out, size_t out_capacity)
+{
+    uint32_t length;
+    uint16_t crc;
+    size_t n = 0u;
+    if (out == NULL || total_blocks == 0u || (data_length != 0u && data == NULL) ||
+        data_length > IMU_POWER_DXL_MAX_PACKET) return 0u;
+    length = 1u + (uint32_t)total_blocks * ((uint32_t)data_length + 4u);
+    if (length > 0xFFFFu || out_capacity < data_length + 12u) return 0u;
+    out[n++] = 0xFFu; out[n++] = 0xFFu; out[n++] = 0xFDu; out[n++] = 0u;
+    out[n++] = IMU_POWER_DXL_BROADCAST;
+    out[n++] = (uint8_t)length; out[n++] = (uint8_t)(length >> 8u);
+    out[n++] = IMU_POWER_DXL_STATUS;
+    out[n++] = error; out[n++] = id;
+    if (data_length != 0u) memcpy(&out[n], data, data_length);
+    n += data_length;
+    crc = imu_power_dxl_crc16(out, n);
+    out[n++] = (uint8_t)crc; out[n++] = (uint8_t)(crc >> 8u);
+    return n;
+}
+
 static const uint8_t packet_header[] = {0xFFu, 0xFFu, 0xFDu, 0u};
 
 static void keep_header_suffix(imu_power_dxl_stream_t *stream)

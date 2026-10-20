@@ -20,6 +20,8 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 - USART1 提供 115,200 bps 文本维护口，与软总线同时工作。
 - 总线固件升级：引导程序加两个应用槽，新固件经校验、试运行并由自己确认；升级失败自动回到旧版本
   （[docs/ota.md](docs/ota.md)，英文）。
+- Fast Sync Read（0x8A）：请求里本板排第一个 ID 时，由它起头发出合并的状态包
+  （[docs/control-table.md](docs/control-table.md)，英文）。
 
 ## 状态
 
@@ -27,7 +29,7 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 
 | | |
 |---|---|
-| 版本 | `0x0210`（引导程序 `0x0100`）；上一发布 `0x020B`（标签 `firmware-20261006-0x020b`） |
+| 版本 | `0x0211`（引导程序 `0x0100`）；上一发布 `0x0210` |
 | MCU / IMU | CH32V203C8U6（8 MHz 晶振）/ LSM6DSV16X |
 | 默认值 | ID 200，1,000,000 bps；±500 dps、±2 g、240 Hz |
 | 软总线 | USART2，PA2（TX）/ PA3（RX），1,000,000 bps 8N1 |

@@ -12,7 +12,7 @@
 #endif
 /* Firmware version reported at address 160; override for test builds with -DIMU_POWER_FW_VERSION=0x....u */
 #ifndef IMU_POWER_FW_VERSION
-#define IMU_POWER_FW_VERSION 0x0210u
+#define IMU_POWER_FW_VERSION 0x0211u
 #endif
 #define IMU_POWER_DEFAULT_BAUD 1000000u
 #define IMU_POWER_CONFIG_MAGIC 0x494D5532u

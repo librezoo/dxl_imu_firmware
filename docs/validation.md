@@ -25,6 +25,7 @@ adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitab
 | 0x020A | 2026-09-24 | Soft bus moved to USART2, CLI always on USART1 | BIN 15,956 bytes, SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`, identical from all three build entries; flash read-back identical. `READ` 300/300, `SYNC_READ` 100/100, CLI commands, baud switching 57.6 k–3 M. A servo (ID 3, model 1200) found through the soft bus; IMU 20/20 samples valid at about 251.7 Hz. |
 | 0x020B | 2026-10-06 | Bus-writable IMU parameters | See below. |
 | 0x0210 | 2026-10-07 | Bootloader and firmware update over the bus | See below. |
+| 0x0211 | 2026-10-21 | Fast Sync Read (0x8A), first block only | Host tests 8/8, the block byte for byte against the ROBOTIS e-manual packet; the two new checks fail when the length or the first-ID rule is broken. Not run on a board yet. |
 
 ## 0x0210
 
@@ -77,6 +78,9 @@ by a `dxl_debugger_firmware` bridge.
   restarted from stale data (regression test added).
 
 ## Not verified
+
+- 0x0211: Fast Sync Read on a board, with servos that implement 0x8A answering behind it (the KPower RD05T does not,
+  so the combination is untested); a build with the official WCH toolchain.
 
 - 0x0210: a power cut (as opposed to a debug reset) during a flash write on the bench; updates over the soft-bus pins
   PA2/PA3 (the code path exists, the pins were not reachable); updates with servos active on the bus; a build of

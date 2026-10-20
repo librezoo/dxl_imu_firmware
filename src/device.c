@@ -264,6 +264,20 @@ size_t imu_power_device_handle(imu_power_device_t *device,
                 return 0u;
             return status(device, IMU_POWER_DXL_OK, payload, length, response, response_capacity, false);
         }
+    case IMU_POWER_DXL_FAST_SYNC_READ:
+        /* Same request as a Sync Read; the answer is one status packet that every device of the list adds to. This
+           board only starts that packet, so it answers when it is the FIRST ID of the list (the robot's control
+           loop lists it first, so that it speaks before the servo burst). Further down the list it would have to
+           append to bytes still on the wire at the right moment, which this firmware does not time: it stays
+           silent there, and the read times out instead of colliding with the other devices. */
+        if (!frame->broadcast || frame->parameter_length < 5u) return 0u;
+        address = get_u16(frame->parameters); length = get_u16(&frame->parameters[2]);
+        if (frame->parameters[4] != device->runtime_id || length > IMU_POWER_MAX_READ ||
+            !read_registers(device, address, length, payload))
+            return 0u;
+        return imu_power_dxl_build_fast_sync_first_block(
+            (uint16_t)(frame->parameter_length - 4u), device->runtime_id, IMU_POWER_DXL_OK,
+            payload, length, response, response_capacity);
     case IMU_POWER_DXL_WRITE:
     case IMU_POWER_DXL_REG_WRITE:
         if (!addressed || frame->parameter_length < 2u) return 0u;
