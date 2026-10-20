@@ -21,7 +21,8 @@ is byte-stuffed, and `LEN = 1 + devices × (length + 4)`. The first device sends
 append theirs. This board does the first block only: it answers when it is the **first** ID of the list (the robot's
 control loop lists it first), and is silent anywhere else or when addressed directly, so a misplaced board makes the
 read time out rather than collide with the servos. The servos have to implement 0x8A as well, or the whole read times
-out (XL330 firmware 46 or newer; the KPower RD05T does not answer it).
+out (XL330 firmware 46 or newer; of the KPower RD05T units on the bench one answers it and an earlier one, with
+firmware byte 52, did not).
 
 `RESET` reboots the board. `REG_WRITE`, `ACTION` and `SYNC_WRITE` act on the configuration registers only.
 Reads of unlisted addresses in 136–159 return zero; any other unlisted address returns a data-range error.

@@ -25,7 +25,7 @@ adapter (0x020B). The WCH-LinkE serial port (921,600 baud at most) is not suitab
 | 0x020A | 2026-09-24 | Soft bus moved to USART2, CLI always on USART1 | BIN 15,956 bytes, SHA-256 `3d132032302cfaab52e658bcc59df0d08435d2abacf9f8401c15d8cce023a51e`, identical from all three build entries; flash read-back identical. `READ` 300/300, `SYNC_READ` 100/100, CLI commands, baud switching 57.6 k–3 M. A servo (ID 3, model 1200) found through the soft bus; IMU 20/20 samples valid at about 251.7 Hz. |
 | 0x020B | 2026-10-06 | Bus-writable IMU parameters | See below. |
 | 0x0210 | 2026-10-07 | Bootloader and firmware update over the bus | See below. |
-| 0x0211 | 2026-10-21 | Fast Sync Read (0x8A), first block only | Host tests 8/8, the block byte for byte against the ROBOTIS e-manual packet; the two new checks fail when the length or the first-ID rule is broken. Not run on a board yet. |
+| 0x0211 | 2026-10-21 | Fast Sync Read (0x8A), first block only | See below. |
 
 ## 0x0210
 
@@ -77,10 +77,26 @@ by a `dxl_debugger_firmware` bridge.
 - Fixed in this version: `LOAD_DEFAULTS` did not discard earlier staged writes, so a later single-field write
   restarted from stale data (regression test added).
 
+## 0x0211
+
+- Built with xPack `riscv-none-elf-gcc` 12.5.0-1: slots 18,516 bytes each, update bundle 37,084 bytes (SHA-256
+  `81cb6fa8be562aab20184c614c53fb3972d211be30320c98b9a4eac1160b89e8`), `initial.bin` 27,732 bytes (SHA-256
+  `ab50df6ca0d19c5952be4692f9c9dc5d49f9315cc04ef6b59f06908944276f24`). Host tests 8/8; the first block is checked
+  byte for byte against the ROBOTIS e-manual's status packet, and the two new checks fail when the length or the
+  first-ID rule is broken.
+- Flashed over SWD on a board that ran 0x020A (no bootloader, read-protected): protection removed (whole chip erased),
+  `initial.bin` written, board reset. Afterwards: firmware 0x0211, slot A confirmed, bootloader 0x0100, IMU samples valid.
+- Fast Sync Read on the bench, through the debugger bridge, IMU at ID 200 and a KPower RD05T at ID 10 (which answers
+  0x8A): `[200]` and `[200, 10]` 300/300 each, every block present, in order, running CRC valid. `[200, 10]` gives one
+  packet with LEN 33 and both blocks. `[10, 200]` (IMU not first) gives the servo's block only, the IMU stays silent as
+  designed; 0x8A addressed to 200 directly gets no answer. A third device that does not implement 0x8A leaves the
+  packet one block short, as the protocol says it must. Reading `[200, 10]` takes 1.75 ms with 0x8A and 1.76 ms with
+  `SYNC_READ`: two devices save about 0.1 ms, below what this USB path resolves; the saving grows with the device count.
+
 ## Not verified
 
-- 0x0211: Fast Sync Read on a board, with servos that implement 0x8A answering behind it (the KPower RD05T does not,
-  so the combination is untested); a build with the official WCH toolchain.
+- 0x0211: Fast Sync Read with the full set of fifteen servos behind the board and `robotd` running; the IMU anywhere
+  but first in the list (it is silent there by design); a build with the official WCH toolchain.
 
 - 0x0210: a power cut (as opposed to a debug reset) during a flash write on the bench; updates over the soft-bus pins
   PA2/PA3 (the code path exists, the pins were not reachable); updates with servos active on the bus; a build of
