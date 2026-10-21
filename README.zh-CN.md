@@ -29,7 +29,7 @@ DXL IMU/电源板固件：WCH CH32V203C8U6 加 ST LSM6DSV16X IMU，使用 Dynami
 
 | | |
 |---|---|
-| 版本 | `0x0211`（引导程序 `0x0100`）；上一发布 `0x0210` |
+| 版本 | `0x0211`（引导程序 `0x0100`）；上一发布 `0x0210`（标签 `firmware-20261007-0x0210`） |
 | MCU / IMU | CH32V203C8U6（8 MHz 晶振）/ LSM6DSV16X |
 | 默认值 | ID 200，1,000,000 bps；±500 dps、±2 g、240 Hz |
 | 软总线 | USART2，PA2（TX）/ PA3（RX），1,000,000 bps 8N1 |

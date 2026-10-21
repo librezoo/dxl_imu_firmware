@@ -30,7 +30,7 @@ USB-UART to that bus.
 
 | | |
 |---|---|
-| Version | `0x0211` (bootloader `0x0100`); previous release `0x0210` |
+| Version | `0x0211` (bootloader `0x0100`); previous release `0x0210` (tag `firmware-20261007-0x0210`) |
 | MCU / IMU | CH32V203C8U6 (8 MHz crystal) / LSM6DSV16X |
 | Defaults | ID 200, 1,000,000 bps; ±500 dps, ±2 g, 240 Hz |
 | Soft bus | USART2, PA2 (TX) / PA3 (RX), 1,000,000 bps 8N1 |
